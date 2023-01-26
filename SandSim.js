@@ -26,7 +26,7 @@ canvas.clearScreen = () => renderer.fill(Color.BLACK);
 
 const TYPES = Object.fromEntries([
 	"AIR",
-	"TEST", "URANIUM",
+	"TEST", "URANIUM", "ORANGEJUICE", "POWDER", "OXYGEN",
 	"SUNFLOWER_PETAL", "SUNFLOWER_STEM", "SUNFLOWER_SEED",
 	"SOIL", "DAMP_SOIL", "ROOT", "GRASS", "FLOWER",
 	"HIGH_EXPLOSIVE", "EXPLOSIVE", "EXPLOSIVE_DUST",
@@ -688,7 +688,7 @@ const GRAVITY = 0.5 / CELL;
 const DISPERSION = 4;
 
 const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT]);
-const LIQUID = new Set([TYPES.WATER, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
+const LIQUID = new Set([TYPES.ORANGEJUICE, TYPES.WATER, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
 const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE]);
 const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, ...GAS]);
 const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL, TYPES.ESTIUM]);
@@ -965,18 +965,41 @@ const DATA = {
 		Element.tryMove(x, y, Math.round(x + v.x), Math.round(y + v.y), SOLID_PASS_THROUGH)
 	}),
 	
+	//first test element
 	[TYPES.URANIUM]: new Element(1, (x, y) => {
+		//color script
+		return Color.alpha(new Color("#6a00ff"),0.1); //change the glow of a material based on the alpha
+	}, 0, 0, (x, y) => {
+		//interval update script
+	}),
+
+	//liquid testing
+	[TYPES.ORANGEJUICE]: new Element(1, (x, y) => {
+		//color script
+		return Color.alpha(new Color("#ffa200"),1); //change the glow of a material based on the alpha, although it is transparent
+	}, 0, 0, (x, y) => {
+		//interval update script
+		//nothing too special here, to make the liquid react add other stuff to it!
+		liquidUpdate(x,y);
+	}),
+
+	//dust / powder testing (solid but effected by grav)
+	[TYPES.POWDER]: new Element(1, (x, y) => {
 		//color script
 		return Color.alpha(new Color("#00ff22"),0); //change the glow of a material based on the alpha
 	}, 0, 0, (x, y) => {
 		//interval update script
-		const v = grid[x][y].vel;
-		if (Element.threeChecks(x, y + 1, SOLID_PASS_THROUGH)) {
-			const c = Random.range(0, Math.PI);
-			v.x = Math.cos(c);
-			v.y = Math.sin(c);
-		}
-		Element.tryMove(x, y, Math.round(x + v.x), Math.round(y + v.y), SOLID_PASS_THROUGH)
+		//solid update syntax: x,y , effect of gravity, distance the particle will shift randomly while in air
+		solidUpdate(x,y,0,1);
+	}),
+
+	[TYPES.OXYGEN]: new Element(1, (x, y) => {
+		//color script
+		return Color.alpha(new Color("#b3fff7"),0); //change the glow of a material based on the alpha
+	}, 0, 0, (x, y) => {
+		//interval update script
+		//yet again nothing special add other stuff here
+		gasUpdate(x,y);
 	}),
 
 	[TYPES.EXOTHERMIA]: new Element(1, (x, y) => {
