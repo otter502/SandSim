@@ -26,7 +26,7 @@ canvas.clearScreen = () => renderer.fill(Color.BLACK);
 
 const TYPES = Object.fromEntries([
 	"AIR",
-	"TEST",
+	"TEST", "URANIUM",
 	"SUNFLOWER_PETAL", "SUNFLOWER_STEM", "SUNFLOWER_SEED",
 	"SOIL", "DAMP_SOIL", "ROOT", "GRASS", "FLOWER",
 	"HIGH_EXPLOSIVE", "EXPLOSIVE", "EXPLOSIVE_DUST",
@@ -955,18 +955,6 @@ const DATA = {
 		const mod = (a, b) => (a % b + b) % b;
 		return mod(vec.y, 5) < 1 ? Color.alpha(Color.RED, 40 / 255) : new Color(100, 100, 100, Color.EPSILON);
 
-		const vectors = [];
-		for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-			const p = Random.perlin2D(x + i, y + j, .1);
-			vectors.push(new Vector2(i, j).mul(p));
-		}
-
-		const f = Vector2.sum(vectors).times(0.5).plus(0.5);
-		return new Color(f.x * 255, f.y * 255, 0, Color.EPSILON);
-		// if (f.x < 0 && f.y < 0) return new Color("#FF000001");
-		// else if (f.x >= 0 && f.y < 0) return new Color("#00FF0001");
-		// else if (f.x < 0 && f.y >= 0) return new Color("#0000FF01");
-		// else return new Color("#FFFFFF01")
 	}, 0, 0, (x, y) => {
 		const v = grid[x][y].vel;
 		if (Element.threeChecks(x, y + 1, SOLID_PASS_THROUGH)) {
@@ -975,7 +963,20 @@ const DATA = {
 			v.y = Math.sin(c);
 		}
 		Element.tryMove(x, y, Math.round(x + v.x), Math.round(y + v.y), SOLID_PASS_THROUGH)
-
+	}),
+	
+	[TYPES.URANIUM]: new Element(1, (x, y) => {
+		//color script
+		return Color.alpha(new Color("#00ff22"),0); //change the glow of a material based on the alpha
+	}, 0, 0, (x, y) => {
+		//interval update script
+		const v = grid[x][y].vel;
+		if (Element.threeChecks(x, y + 1, SOLID_PASS_THROUGH)) {
+			const c = Random.range(0, Math.PI);
+			v.x = Math.cos(c);
+			v.y = Math.sin(c);
+		}
+		Element.tryMove(x, y, Math.round(x + v.x), Math.round(y + v.y), SOLID_PASS_THROUGH)
 	}),
 
 	[TYPES.EXOTHERMIA]: new Element(1, (x, y) => {
@@ -3177,7 +3178,7 @@ intervals.continuous(time => {
 					const r = brushSize;
 					const { world } = touches.get(touch);
 
-					const hovered = scene.main.getElementWithScript(TYPE_SELECTOR).some(el => !el.hidden && el.collidePoint(world));
+					const hovered = scene.main.getElementsWithScript(TYPE_SELECTOR).some(el => !el.hidden && el.collidePoint(world));
 
 					if (hovered) {
 						anyHovered = true;
