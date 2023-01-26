@@ -1096,7 +1096,7 @@ const DATA = {
 				Element.setCell(ox,oy, TYPES.AIR);
 				if((Random.bool(.05))){makeCircle(x,y,TYPES.TERMINATOR,7)}
 			}else if (Element.isTypes(ox,oy, TERMINATOR_EXPLOSIVE)){
-				makeCircle(x,y,grid[ox,oy].id,5);
+				makeCircle(x,y,grid[x][y],5);
 				explode(ox,oy,3,1);
 				Element.die(x,y);
 			}
