@@ -1101,12 +1101,14 @@ const DATA = {
 				Element.die(x,y);
 			}
 		});
-		cell.acts++;
+		cell.acts++; //change this to make the terminator to act quicker
 		if(cell.acts >= 250){ //this checks if A. the cell has eaten or if the cell is too old
 			Element.die(x,y);
 		}
-		Element.tryMove(x,y,x-((2*Random.bool()-1)),y-((2*Random.bool()-1)),LIQUID_PASS_THROUGH);
-		//to get them to be super chaotic multiply ((2*Random.bool()-1)) by cell.acts, it will cause a true terminator
+		let movement_chaos = Math.trunc((260)/cell.acts); //change this to change how much movement is varied deafult is 250
+		
+		Element.tryMove(x,y,x-((2*Random.bool()-1)*movement_chaos),y-((2*Random.bool()-1)*movement_chaos),LIQUID_PASS_THROUGH);
+		//to get them to be super chaotic change movement chaos to be depenent on the cell.acts value.
 		
 	},(x,y)=>null),
 	
