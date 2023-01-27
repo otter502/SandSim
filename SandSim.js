@@ -716,7 +716,6 @@ const NEURON = new Set([TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON])
 const BRAIN = new Set([...NEURON, TYPES.CEREBRUM])
 const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD, TYPES.BONE])
 
-const TERMINATOR_EXPLOSIVE = new Set([TYPES.ACID, TYPES.CONDENSED_STONE,TYPES.ELECTRICITY]);
 const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR,TYPES.AIR]);
 
 const genderfluidFlag = flag([
@@ -1080,36 +1079,32 @@ const DATA = {
 		Element.trySetCell(x,y-1,TYPES.CONDENSED_STONE,ALL_PASSTHROUGH);
 		//there is a boolean argument after this but I have no clue what it does
 	}),
-
+	
 	[TYPES.TERMINATOR]: new Element(0,(x,y)=>{
 		const angle = Random.perlin2D(x, y, 0.01) * Math.PI * 2;
 		const vec = new Vector2(x, y).rotate(angle);
 		const mod = (a, b) => (a % b + b) % b;
-		return mod(vec.y, 5) < 1 ? Color.alpha(Color.LIME, 40 / 255):Color.alpha(Color.PURPLE, 1 / 255);
+		return mod(vec.y, 5) < 1 ? Color.alpha(Color.LIME, 40/255):Color.alpha(Color.PURPLE, 1 / 255);
 	},0,0,(x,y)=>{
 		const cell = grid[x][y];
 		Element.updateCell(x,y);
 		Element.affectAllNeighbors(x,y,(ox, oy) => {
-			if (!Element.isTypes(ox, oy, TERMINATOR_UNREACTIVE) && !Element.isTypes(ox,oy, TERMINATOR_EXPLOSIVE)) { //change the cell acts value here to change how long until the wire can eat
+			if (!Element.isTypes(ox, oy, TERMINATOR_UNREACTIVE)) { //change the cell acts value here to change how long until the wire can eat
 				cell.acts -=15;
 				//if ((Random.bool(Random.perlin2D(x, y, 100) / 200))) 
 				Element.setCell(ox,oy, TYPES.AIR);
 				if((Random.bool(.05))){makeCircle(x,y,TYPES.TERMINATOR,7)}
-			}else if (Element.isTypes(ox,oy, TERMINATOR_EXPLOSIVE)){
-				makeCircle(x,y,grid[x][y],5);
-				explode(ox,oy,3,1);
-				Element.die(x,y);
 			}
 		});
-		cell.acts++; //change this to make the terminator to act quicker
 		if(cell.acts >= 250){ //this checks if A. the cell has eaten or if the cell is too old
-			Element.die(x,y);
+			Element.setCell(x,y,TYPES.AIR);
 		}
-		let movement_chaos = Math.trunc((260)/cell.acts); //change this to change how much movement is varied deafult is 250
-		
+		cell.acts++;
+		const moveMax = 250;
+		const moveMin = 0;
+		let movement_chaos = Math.max(Math.min(Math.trunc((260)/cell.acts),moveMax),moveMin); //change this to change how much movement is varied deafult is 250
 		Element.tryMove(x,y,x-((2*Random.bool()-1)*movement_chaos),y-((2*Random.bool()-1)*movement_chaos),LIQUID_PASS_THROUGH);
 		//to get them to be super chaotic change movement chaos to be depenent on the cell.acts value.
-		
 	},(x,y)=>null),
 	
 
@@ -2384,7 +2379,7 @@ const DATA = {
 	[TYPES.ACID]: new Element(30, [Color.LIME, new Color("#2dfc2d")], 0.1, 0, (x, y) => {
 		const cell = grid[x][y];
 		Element.affectNeighbors(x, y, (x, y) => {
-			if (!Element.isType(x, y, TYPES.ACID) && !Element.isType(x, y, TYPES.GLASS) && !Element.isType(x, y, TYPES.GLASS) && Random.bool(0.5)) {
+			if (!Element.isType(x, y, TYPES.ACID) && !Element.isType(x, y, TYPES.GLASS) && Random.bool(0.5)) { //changed this although you had two copies of the istype glass checker
 				if (Element.isType(x, y, TYPES.CONDENSED_STONE)) {
 					if (Random.bool(.0004)) {
 						Element.setCell(x, y, TYPES.AIR);
