@@ -29,7 +29,7 @@ const TYPES = Object.fromEntries([
 	"TEST", "URANIUM", "ORANGEJUICE", "POWDER", "OXYGEN", "BURNING_BRICKS", "COPPER_BRICKS",
 	"SUNFLOWER_PETAL", "SUNFLOWER_STEM", "SUNFLOWER_SEED",
 	"SOIL", "DAMP_SOIL", "ROOT", "GRASS", "FLOWER",
-	"HIGH_EXPLOSIVE", "EXPLOSIVE", "EXPLOSIVE_DUST",
+	"HIGH_EXPLOSIVE", "EXPLOSIVE", "EXPLOSIVE_DUST", "FLASH_PAPER", "WET_PAPER",
 	"STONE", "CONDENSED_STONE", "MARBLE",
 	"CLAY", "BRICK",
 	"TILE_BASE", "DECUMAN_TILE",
@@ -89,7 +89,6 @@ class Cell {
 }
 
 class WorldSave {
-	static MAGIC_SAVE_CONSTANT = 0xcc910831; // indicates elements are stored absolutely
 	constructor(grid) {
 		this.grid = grid;
 	}
@@ -1106,6 +1105,20 @@ const DATA = {
 		Element.tryMove(x,y,x-((2*Random.bool()-1)*movement_chaos),y-((2*Random.bool()-1)*movement_chaos),LIQUID_PASS_THROUGH);
 		//to get them to be super chaotic change movement chaos to be depenent on the cell.acts value.
 	},(x,y)=>null),
+
+	[TYPES.FLASH_PAPER]: new Element(1, [new Color("#edebe1"), new Color("#f4f5df"), new Color("#cfbba3")], 0, 1, (x, y) => {
+		Element.consumeReact(x, y, TYPES.WATER, TYPES.WET_PAPER);
+	},(x,y)=>{
+		Element.trySetCell(x, y - 1, Random.bool(.1) ? TYPES.ASH : TYPES.SMOKE);
+	}),
+
+
+	[TYPES.WET_PAPER]: new Element(1, [new Color("#edebe1"), new Color("#f4f5df"), new Color("#b8c4ad")] , 0.2, 0, (x, y) => {
+		solidUpdate(x,y,0.2,0);
+		Element.permeate(x, y, TYPES.WET_PAPER, TYPES.FLASH_PAPER, TYPES.WATER, 2);
+	},(x,y)=>{
+		Element.setCell(x,y,FLASH_PAPER);
+	}),
 	
 
 	[TYPES.EXOTHERMIA]: new Element(1, (x, y) => {
