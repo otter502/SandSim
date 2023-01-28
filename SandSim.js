@@ -47,7 +47,7 @@ const TYPES = Object.fromEntries([
 	"LAVA", "POWER_LAVA",
 	"STEAM", "SMOKE", "HYDROGEN",
 	"GLASS", "ACID",
-	"BATTERY", "ELECTRICITY",
+	"BATTERY", "ELECTRICITY","GERMANIUM", "ACTIVE_GERMANIUM",
 	"CONVEYOR_LEFT", "CONVEYOR_RIGHT", "STEEL",
 	"COPPER", "LIQUID_COPPER",
 	"LEAD", "LIQUID_LEAD",
@@ -704,7 +704,7 @@ const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
 const GLAZE_TYPES = new Set([TYPES.GLAZE_BASE, TYPES.DECUMAN_GLAZE])
 const ANT_UNSTICKABLE = new Set([TYPES.GENDERFLUID, TYPES.COPPER, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.IRON, TYPES.LIQUID_IRON, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.MUSCLE, ...WATER_TYPES]);
 const CONDUCTIVE = new Set([TYPES.COPPER_BRICKS, TYPES.GENDERFLUID, TYPES.LIGHT_SAD, TYPES.COPPER, TYPES.GOLD, TYPES.AUREATE_DUST, TYPES.LIQUID_GOLD, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.IRON, TYPES.MUSCLE, ...WATER_TYPES]);
-const ELECTRICITY_PASSTHROUGH = new Set([...CONDUCTIVE, TYPES.ELECTRICITY]);
+const ELECTRICITY_PASSTHROUGH = new Set([...CONDUCTIVE,TYPES.GERMANIUM, TYPES.ELECTRICITY]);
 const SUGARY = new Set([TYPES.SUGAR, TYPES.HONEY]);
 const COLD = new Set([...WATER_TYPES, TYPES.ICE, TYPES.BLOOD, TYPES.ESTIUM, TYPES.HONEY]);
 const SOIL_TYPES = new Set([TYPES.DAMP_SOIL, TYPES.SOIL]);
@@ -716,6 +716,7 @@ const BRAIN = new Set([...NEURON, TYPES.CEREBRUM])
 const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD, TYPES.BONE])
 
 const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR,TYPES.AIR]);
+const HEAT = new Set([TYPES.FIRE,TYPES.BLUE_FIRE,TYPES.LAVA,TYPES.POWER_LAVA,TYPES.EXOTHERMIA]);
 
 const genderfluidFlag = flag([
 	"#FF76A401",
@@ -947,6 +948,8 @@ function flag(colors) {
 	};
 }
 
+//up down left right, top right, top left, bottom right, bottom left
+const directionArray = [[0,1],[0,-1],[-1,0],[1,0],[1,1],[-1,1],[1,-1],[-1,-1]];
 
 const DATA = {
 	[TYPES.AIR]: new Element(0, Color.BLANK),
@@ -1113,11 +1116,81 @@ const DATA = {
 	}),
 
 
-	[TYPES.WET_PAPER]: new Element(1, [new Color("#edebe1"), new Color("#f4f5df"), new Color("#b8c4ad")] , 0.2, 0, (x, y) => {
+	[TYPES.WET_PAPER]: new Element(1, [new Color("#edebe1"), new Color("#f4f5df"), new Color("#b8c4ad")] , 0.2, 0.25, (x, y) => {
 		solidUpdate(x,y,0.2,0);
-		Element.permeate(x, y, TYPES.WET_PAPER, TYPES.FLASH_PAPER, TYPES.WATER, 2);
+		if (Element.isType(x, y - 1, TYPES.WATER)) {
+			Element.permeate(x, y, TYPES.WET_PAPER, TYPES.FLASH_PAPER, TYPES.WATER, 2);			
+		}
 	},(x,y)=>{
-		Element.setCell(x,y,FLASH_PAPER);
+		Element.trySetCell(x,y-1,(Random.bool(0.5)) ? TYPES.FLASH_PAPER : TYPES.WATER);
+
+	}),
+
+	[TYPES.GERMANIUM]: new Element(1,(x,y)=>{
+		return Color.alpha(new Color("#edebe1"),0);
+	},0.4,0,(x,y)=>{
+		//up down left right, top right, top left, bottom right, bottom left
+		
+		let reacted = false;
+		Element.affectAllNeighbors(x, y, (ox, oy) => {
+			if (!reacted && Element.isTypes(ox, oy, HEAT)) {
+				// let germID = grid[x][y].id;
+				Element.setCell(x,y,TYPES.ACTIVE_GERMANIUM);
+				let positionArr = [ox-x,oy-y];
+				for (let index = 0; index < directionArray.length; index++) {
+					const element = directionArray[index];
+					if(element[0]==positionArr[0] && element[1]==positionArr[1]){
+						grid[x,y].acts = index;
+					}
+				}
+				// grid[x,y].acts = directionArray.findIndex([ox-x,oy-y]);
+				Element.die(ox, oy);
+				reacted = true;
+			}
+		});
+	}),
+
+	//this is a helper class
+	[TYPES.ACTIVE_GERMANIUM]: new Element(0,(x,y)=>{
+		return Color.alpha(new Color("#4287f5"),1);
+	},0.4,0,(x,y)=>{
+
+
+		let cell = grid[x][y];
+		let moveArr;
+		if(cell.acts >= 1 && cell.acts <=8){
+			console.log("normal move triggered: acts:"+cell.acts);
+			moveArr = directionArray[cell.acts-1];
+		}else{
+			console.log("rando triggered");
+			let randomValue = Math.trunc(Random.range(1, 9));
+			cell.acts = randomValue;
+			console.log("act: "+cell.acts+"\n randomValue: "+randomValue);
+			moveArr = directionArray[randomValue-1];
+		}
+		const thisAct = cell.acts; 
+		console.log("made move arr: "+moveArr);
+		// if(Element.isType(x+moveArr[0],y+moveArr[1],TYPES.GERMANIUM)){
+		// 	console.log("germanium detected");
+		// }
+		let hasMoved = Element.tryMove(x,y,x+moveArr[0],y+moveArr[1],new Set([TYPES.GERMANIUM]));
+		console.log("moved : "+cell.acts);
+
+		if(!hasMoved){
+			console.log("generating elec");
+			Element.setCell(x,y,TYPES.ELECTRICITY);
+			console.log("elec made");
+			grid[x][y].reference = TYPES.GERMANIUM;
+		}else{
+			console.log("changing refrence");
+			grid[x+moveArr[0]][y+moveArr[1]].acts = thisAct;
+			Element.setCell(x,y,TYPES.GERMANIUM);
+		}
+		// Element.move(x,y,x+1,y+1);
+		// move through germanium in the direction shown then at the end it will turn into electricity and reconstruct
+		// also what about a element that reacts to electricty by replacing it creating a trail
+		// directional travel
+				
 	}),
 	
 
