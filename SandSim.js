@@ -1150,7 +1150,6 @@ const DATA = {
 		});
 	}),
 
-	//this is a helper class
 	[TYPES.ACTIVE_GERMANIUM]: new Element(0,(x,y)=>{
 		return Color.alpha(new Color("#4287f5"),1);
 	},0.4,0,(x,y)=>{
