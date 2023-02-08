@@ -47,7 +47,7 @@ const TYPES = Object.fromEntries([
 	"LAVA", "POWER_LAVA",
 	"STEAM", "SMOKE", "HYDROGEN",
 	"GLASS", "ACID",
-	"BATTERY", "ELECTRICITY","GERMANIUM", "ACTIVE_GERMANIUM",
+	"BATTERY", "ELECTRICITY","GERMANIUM", "ACTIVE_GERMANIUM", "BOID",
 	"CONVEYOR_LEFT", "CONVEYOR_RIGHT", "STEEL",
 	"COPPER", "LIQUID_COPPER",
 	"LEAD", "LIQUID_LEAD",
@@ -717,7 +717,7 @@ const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD, TYP
 
 const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR,TYPES.AIR]);
 const HEAT = new Set([TYPES.FIRE,TYPES.BLUE_FIRE,TYPES.LAVA,TYPES.POWER_LAVA,TYPES.EXOTHERMIA]);
-
+const GERMANIUM_PASSTHROUGH = new Set([TYPES.GERMANIUM]);
 const genderfluidFlag = flag([
 	"#FF76A401",
 	"#FFFFFF01",
@@ -1123,7 +1123,6 @@ const DATA = {
 		}
 	},(x,y)=>{
 		Element.trySetCell(x,y-1,(Random.bool(0.5)) ? TYPES.FLASH_PAPER : TYPES.WATER);
-
 	}),
 
 	[TYPES.GERMANIUM]: new Element(1,(x,y)=>{
@@ -1158,30 +1157,30 @@ const DATA = {
 		let cell = grid[x][y];
 		let moveArr;
 		if(cell.acts >= 1 && cell.acts <=8){
-			console.log("normal move triggered: acts:"+cell.acts);
+			// console.log("normal move triggered: acts:"+cell.acts);
 			moveArr = directionArray[cell.acts-1];
 		}else{
-			console.log("rando triggered");
+			// console.log("rando triggered");
 			let randomValue = Math.trunc(Random.range(1, 9));
 			cell.acts = randomValue;
-			console.log("act: "+cell.acts+"\n randomValue: "+randomValue);
+			// console.log("act: "+cell.acts+"\n randomValue: "+randomValue);
 			moveArr = directionArray[randomValue-1];
 		}
 		const thisAct = cell.acts; 
-		console.log("made move arr: "+moveArr);
+		// console.log("made move arr: "+moveArr);
 		// if(Element.isType(x+moveArr[0],y+moveArr[1],TYPES.GERMANIUM)){
 		// 	console.log("germanium detected");
 		// }
-		let hasMoved = Element.tryMove(x,y,x+moveArr[0],y+moveArr[1],new Set([TYPES.GERMANIUM]));
-		console.log("moved : "+cell.acts);
+		let hasMoved = Element.tryMove(x,y,x+moveArr[0],y+moveArr[1],GERMANIUM_PASSTHROUGH);
+		// console.log("moved : "+cell.acts);
 
 		if(!hasMoved){
-			console.log("generating elec");
+			// console.log("generating elec");
 			Element.setCell(x,y,TYPES.ELECTRICITY);
-			console.log("elec made");
+			// console.log("elec made");
 			grid[x][y].reference = TYPES.GERMANIUM;
 		}else{
-			console.log("changing refrence");
+			// console.log("changing refrence");
 			grid[x+moveArr[0]][y+moveArr[1]].acts = thisAct;
 			Element.setCell(x,y,TYPES.GERMANIUM);
 		}
@@ -1191,7 +1190,25 @@ const DATA = {
 		// directional travel
 				
 	}),
-	
+
+	[TYPES.BOID]: new Element(1, (x, y) => {
+		return Color.alpha(new Color("#b3fff7"),0);
+	}, 0, 0.1, (x,y)=>{
+		if (Element.isTypes(x,y+1,SOLID_PASS_THROUGH)) {
+		const v = grid[x][y].vel;
+			//FIXME after addign this the website loads inconsistently
+			v.y = (v.y > 10) ? v.y+1 : v.y+1; //FIXME there seems to be a weird error where if you just have v.y += 1; v.x += 1; it will crash inconsistentally
+			
+			// v.x += Random.bool(0.6) ? 0.5 : -1;
+			Element.tryMove(x, y, Math.round(x + v.x), Math.round(y + v.y), SOLID_PASS_THROUGH);
+			console.log(v);
+		}
+		
+	},(x,y)=>{
+		Element.trySetCell(x,y-1,TYPES.CONDENSED_STONE,ALL_PASSTHROUGH);
+		
+		//there is a boolean argument after this but I have no clue what it does
+	}),
 
 	[TYPES.EXOTHERMIA]: new Element(1, (x, y) => {
 		if (y == 0) return new Color("#b5193b");
@@ -2007,7 +2024,7 @@ const DATA = {
 		let t = Random.perlin(x + .2 * y);
 		if (t > .5) return new Color("#ad853e1d");
 		else if (t > .1) return new Color("#916c341d");
-		else return new Color("#edc9672d");
+		else return new Color("`#edc9672d`");
 	}, 0.55, 0, (x, y) => {
 		if (!Element.consumeReactMany(x, y, COLD, TYPES.GOLD))
 			liquidUpdate(x, y);
