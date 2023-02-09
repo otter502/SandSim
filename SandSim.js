@@ -2857,7 +2857,7 @@ const DATA = {
 		let t = Random.perlin(x + .2 * y);
 		if (t > .5) return new Color("#ad853e1d");
 		else if (t > .1) return new Color("#916c341d");
-		else return new Color("`#edc9672d`");
+		else return new Color("#edc9672d");
 	}, 0.55, 0, (x, y) => {
 		if (!Element.consumeReactMany(x, y, COLD, TYPES.GOLD))
 			liquidUpdate(x, y);
