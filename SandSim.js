@@ -61,7 +61,7 @@ const TYPES = Object.fromEntries([
 	"RADIUM", "ACTINIUM", "THORIUM",
 	"LIGHTNING", "LIGHT", "LIGHT_SAD",
 	"BLOOD", "MUSCLE", "BONE", "EPIDERMIS", "INACTIVE_NEURON", "ACTIVE_NEURON", "CEREBRUM",
-	"CORAL", "DEAD_CORAL", "CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER"
+	"CORAL", "DEAD_CORAL", "ELDER_CORAL", "PETRIFIED_CORAL", "CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER", 
 ].map((n, i) => [n, i]));
 
 const ELEMENT_COUNT = Object.keys(TYPES).length;
@@ -186,7 +186,7 @@ class WorldSave {
 				for (let i = 0; i < duration; i++) {
 					const cell = save.grid[x][y];
 					cell.id = idMap[id];
-					cell.reference = reference;
+					cell.reference = idMap[reference];
 					cell.acts = acts;
 
 					y++;
@@ -812,15 +812,6 @@ class Element {
 
 	burn(x, y, fireType, burn = false) {
 		if (burn || Random.bool(this.flammability)) {
-			if (Random.bool(0.05))
-				synth.play({
-					frequency: 20,
-					volume: Random.range(0.14, 0.3),
-					duration: Random.range(30, 45),
-					fadeOut: 300,
-					wave: "sawtooth"
-				});
-
 			if (!this.onburn(x, y)) { 
 				Element.setCell(x, y, fireType);
 			} else {
@@ -922,15 +913,26 @@ class Element {
 		return x >= 0 && y >= 0 && x < WIDTH && y < HEIGHT;
 	}
 
-	static react(x, y, reactant, product, chance = 1) {
+	static react(x, y, reactant, product, chance = 1, cardinal = false) {
 		let reacted = false;
-		Element.affectAllNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, reactant) && Random.bool(chance)) {
-				Element.setCell(ox, oy, product);
-				reacted = true;
-			}
-		});
-		return reacted;
+		if(cardinal){
+			Element.affectCardinalNeighbors(x, y, (ox, oy) => {
+				if (Element.isType(ox, oy, reactant) && Random.bool(chance)) {
+					Element.setCell(ox, oy, product);
+					reacted = true;
+				}
+			});
+			return reacted;
+		}
+		else {
+			Element.affectAllNeighbors(x, y, (ox, oy) => {
+				if (Element.isType(ox, oy, reactant) && Random.bool(chance)) {
+					Element.setCell(ox, oy, product);
+					reacted = true;
+				}
+			});
+			return reacted;
+		}
 	}
 
 	static consumeReact(x, y, reactant, product, chance = 1) {
@@ -1007,6 +1009,15 @@ class Element {
 			const ox = x + i;
 			const oy = y + j;
 			if ((i || j) && Element.inBounds(ox, oy) && grid[ox][oy].id !== TYPES.AIR)
+				effect(ox, oy);
+		}
+	}
+
+	static affectCardinalNeighbors(x, y, effect) {
+		for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+			const ox = x + i;
+			const oy = y + j;
+			if ((ox == x || oy == y) && (i || j) && Element.inBounds(ox, oy) && grid[ox][oy].id !== TYPES.AIR)
 				effect(ox, oy);
 		}
 	}
@@ -1277,6 +1288,8 @@ const BRAIN = new Set([...NEURON, TYPES.CEREBRUM])
 const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD, TYPES.BONE])
 const THICKETS = new Set([TYPES.THICKET, TYPES.INCENSE, TYPES.THICKET_BUD, TYPES.THICKET_SEED, TYPES.INCENSE_SMOKE, TYPES.THICKET_STEM]);
 const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS]);
+const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL])
+const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL])
 
 function updatePixel(x, y) {
 	tex.setPixel(x, y, DATA[grid[x][y].id].getColor(x, y));
@@ -1544,7 +1557,9 @@ const boidUpdate = (x, y, maxSpeed = 4, accuracy = 1, passthrough) => { // by va
 }
 
 
-const fireUpdate = (x, y, type, up = true) => {
+const fireUpdate = (x, y, type, up = true) => {	
+	soundEffects.fireSound.frequency++;
+
 	let neighbors = 0;
 	let burned = 0;
 	let oxygen = 0;
@@ -2132,23 +2147,65 @@ const DATA = {
 		}
 	}),
 
-	[TYPES.CORAL]: new Element(1, Color.ORANGE, .2, .1, (x, y) => {
-		Element.affectNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 100;
-			if (Element.isType(ox, oy, TYPES.CORAL) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = grid[ox][oy].acts--;
+	[TYPES.CORAL]: new Element(1, (x, y) => {	
+		const p = Random.octave(3, Random.perlin2D, x, y, .1);
+		c = Random.choice(freqColoring([["#ff7f5004", 2], ["#f5673304", 1], ["#f5916904", 1],]));
+		if (p > .5 && p < .56 && Random.bool(.85)) c = new Color(Random.bool() ? "#f0978104" : "#eb876e04");
+
+		return c;
+	}, 0.2, 0.1, (x, y) => {
+		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 120;
+			if (Element.isTypes(ox, oy, CORAL_ON) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = Math.min(100, grid[ox][oy].acts--);
 		})
 		if (grid[x][y].acts <= 0) Element.setCell(x, y, TYPES.DEAD_CORAL);
-		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.CORAL)) Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL);
+		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.CORAL)){
+			Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL, 1, true);
+			Element.react(x, y, TYPES.PETRIFIED_CORAL, TYPES.ELDER_CORAL, .5, true);
+		}
 		grid[x][y].acts-=2;
 
 		Element.updateCell(x, y)
 	}),
 
-	[TYPES.DEAD_CORAL]: new Element(1, Color.GRAY, .2, .1),
+	[TYPES.DEAD_CORAL]: new Element(1, (x, y) => {
+		const p = Random.octave(4, Random.perlin2D, x, y, .05);
+		c = Random.choice(freqColoring([["#a1948f01", 1], ["#948a8701", 2], ["#87817f01", 1]]));
+		if (p > .5 && p < .52 && Random.bool(.35)) c = new Color("#afa09701");
+		return c;
+	}, 0.21, 0.1),
 
-	[TYPES.CORAL_STIMULANT]: new Element(1, Color.LIME, .2, .1, (x, y) => {
-		Element.affectNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, TYPES.DEAD_CORAL) && (ox == x || oy == y)) Element.setCell(ox, oy, TYPES.CORAL)
+	 [TYPES.ELDER_CORAL]: new Element(1, (x, y) => {	
+		c = Random.choice(freqColoring([["#f5673302", 1], ["#fa7e4d02", 1], ["#f5916902", 1],]));
+		return Color.lerp(c, new Color("#00000001"), .5);
+	}, 0.4, 0.04, (x, y) => {
+		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 400;
+			if (Element.isTypes(ox, oy, CORAL_ON) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = grid[ox][oy].acts--;
+		})
+		if (grid[x][y].acts <= 0) Element.setCell(x, y, TYPES.PETRIFIED_CORAL);
+		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.ELDER_CORAL)){
+			Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL, .5, true);
+			Element.react(x, y, TYPES.PETRIFIED_CORAL, TYPES.ELDER_CORAL, 1, true);
+		}
+		grid[x][y].acts-=2;
+
+		Element.updateCell(x, y)
+	}),
+
+	[TYPES.PETRIFIED_CORAL]: new Element(1, (x, y) => {
+		const p = Random.octave(4, Random.perlin2D, x, y, .05);
+		c = Random.choice(freqColoring([["#a1948f01", 1], ["#948a8701", 2], ["#87817f01", 1]]));
+		if (p > .5 && p < .52 && Random.bool(.35)) c = new Color("#afa09701");
+		return Color.lerp(c, new Color("#00000001"), .6);
+	}, 0.45, 0.01),
+
+	[TYPES.CORAL_STIMULANT]: new Element(1, freqColoring([
+		["#0be37e01", 2], ["#08cf7201", 1], ["#05fa8801", 2], 
+	]), 0.2, 0.1, (x, y) => {
+		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.DEAD_CORAL)) Element.setCell(ox, oy, TYPES.CORAL)
+			if (Element.isType(ox, oy, TYPES.PETRIFIED_CORAL)) Element.setCell(ox, oy, TYPES.ELDER_CORAL)
 		})
 		solidUpdate(x, y, undefined, undefined, (x, y, fx, fy) => {
 			if (Element.tryMove(x, y, fx, fy))
@@ -2162,15 +2219,19 @@ const DATA = {
 		});
 	}),
 
-	[TYPES.CORAL_PRODUCER]: new Element(1, Color.RAZZMATAZZ, .2, .1, (x, y) => {
-		Element.affectNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, TYPES.DEAD_CORAL)) Element.trySetCell(x, y + 1, TYPES.CORAL_STIMULANT);
+	[TYPES.CORAL_PRODUCER]: new Element(1, freqColoring([
+		["#f02b7301", 1], ["#ed347801", 1], ["#fc388001", 1], 
+	]), 0.2, 0.1, (x, y) => {
+		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
+			if (Element.isTypes(ox, oy, CORAL_OFF)) Element.trySetCell(x, y + 1, TYPES.CORAL_STIMULANT);
 		})
 	}),
 
-	[TYPES.CORAL_CONSUMER]: new Element(1, Color.MAGENTA, .2, .1, (x, y) => {
-		Element.affectNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, TYPES.CORAL) && Element.isType(x, y - 1, TYPES.CORAL_STIMULANT)) Element.setCell(x, y - 1, TYPES.AIR);
+	[TYPES.CORAL_CONSUMER]: new Element(1, freqColoring([
+		["#b34aed01", 1], ["#a743de01", 1], ["#993dcc01", 1], 
+	]), 0.2, 0.1, (x, y) => {
+		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
+			if ((Element.isType(ox, oy, TYPES.CORAL) || Element.isType(ox, oy, TYPES.ELDER_CORAL)) && Element.isType(x, y - 1, TYPES.CORAL_STIMULANT)) Element.setCell(x, y - 1, TYPES.AIR);
 		})
 	}),
 
@@ -3369,7 +3430,7 @@ const DATA = {
 		new Color("#1fb3d1"), new Color("#28d1c6"),
 		new Color("#2ee885"), new Color("#24c4e0")
 	], 0.1, 0.05, (x, y) => boidUpdate(x, y, 2, 0.2, LIQUID_PASS_THROUGH), (x, y) => {
-		makeCircle(x, y - 1, TYPES.HONEY, 2);
+		makeCircle(x, y - 1, TYPES.BLOOD, 2);
 		explode(x, y - 1, 2);
 	}),
 
@@ -4800,8 +4861,59 @@ function extractDynamicBodies() {
 		dyn[i].scripts.DYNAMIC_OBJECT.extract();
 }
 
+class SoundEffectState {
+	static MAX_INSTANCES = 4;
+	constructor(sound, {
+		maxFrequency = 100,
+		volume = 1
+	}) {
+		this.sound = loadResource(sound + ".mp3");
+		this.frequency = 0;
+		this.instances = [];
+		this.lastDensity = 0;
+		this.maxFrequency = maxFrequency;
+		this.volume = volume;
+	}
+	update() {
+		const density = Number.clamp(this.frequency / this.maxFrequency, 0, 1);
+		this.lastDensity += (density - this.lastDensity) * 0.1;
+		const instContinuous = Number.clamp(this.lastDensity - 0.01, 0, 1) * SoundEffectState.MAX_INSTANCES;
+		const instCount = Math.ceil(instContinuous);
+		const lastInstVolume = instContinuous % 1;
+
+		while (this.instances.length > instCount)
+			this.instances.pop().stop();
+		this.instances.length = instCount;
+		for (let i = 0; i < instCount; i++) {
+			const volume = this.volume * ((i === instCount - 1) ? lastInstVolume : 1);
+			if (!this.instances[i] || this.instances[i].isDone)
+				this.instances[i] = this.sound.play(volume);
+			else this.instances[i].volume = volume;
+		}
+	}
+};
+
+const soundEffects = Object.fromEntries(Object.entries(SOUND_EFFECTS)
+	.map(([sound, props]) => [sound, new SoundEffectState(sound, props)]
+));
+
+function clearSoundEffectDensity() {
+	const keys = Object.keys(SOUND_EFFECTS);
+	for (let i = 0; i < keys.length; i++)
+		soundEffects[keys[i]].frequency = 0;
+}
+
+function updateSoundEffects() {
+	const keys = Object.keys(SOUND_EFFECTS);
+	for (let i = 0; i < keys.length; i++) {
+		soundEffects[keys[i]].update();
+	}
+}
+
 intervals.continuous(time => {
 	// try {
+
+		clearSoundEffectDensity();
 		
 		handleInput();
 		injectDynamicBodies();
@@ -4824,6 +4936,8 @@ intervals.continuous(time => {
 		displayWorld();
 		displayBrushPreview();
 		displayDebugInfo();
+
+		updateSoundEffects();
 
 
 		if (!SELECTORS_SHOWN) {
