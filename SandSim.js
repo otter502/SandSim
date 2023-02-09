@@ -7,6 +7,7 @@ const controls = {
 	"Touch/Click": "Draw with current brush",
 	"Up/Down Arrows": "Change brush size",
 	"</> & Left/Right Arrows": "Change brush type",
+	"p": "Toggle erase only",
 	"Space": "Pause/Play",
 	"Enter": "Advance one step while paused",
 	"s": "Open element selection window",
@@ -16,10 +17,12 @@ const controls = {
 	"Shift + u": "Upload world from file",
 	"r": "Reset world",
 	"e": "Restore zoom",
-	"Shift + =": "Zoom in",
-	"Shift + -": "Zoom out",
-	"Shift + Arrow Keys": "Move camera",
-	"g": "Toggle 'RTX'"
+	"Shift + = & Mouse Wheel Up": "Zoom in",
+	"Shift + - & Mouse Wheel Down": "Zoom out",
+	"Shift + Arrow Keys & Control + Drag": "Move camera",
+	"Control + Click & Drag": "Move camera",
+	"g": "Toggle 'RTX'",
+	"a": "Animate Wall"
 };
 
 canvas.clearScreen = () => renderer.fill(Color.BLACK);
@@ -27,6 +30,7 @@ canvas.clearScreen = () => renderer.fill(Color.BLACK);
 const TYPES = Object.fromEntries([
 	"AIR",
 	"TEST", "URANIUM", "ORANGEJUICE", "POWDER", "OXYGEN", "BURNING_BRICKS", "COPPER_BRICKS",
+	"THICKET_SEED", "THICKET", "THICKET_BUD", "THICKET_STEM", "INCENSE_SMOKE", "INCENSE",
 	"SUNFLOWER_PETAL", "SUNFLOWER_STEM", "SUNFLOWER_SEED",
 	"SOIL", "DAMP_SOIL", "ROOT", "GRASS", "FLOWER",
 	"HIGH_EXPLOSIVE", "EXPLOSIVE", "EXPLOSIVE_DUST", "FLASH_PAPER", "WET_PAPER",
@@ -39,7 +43,7 @@ const TYPES = Object.fromEntries([
 	"EXOTHERMIA", "FIRE", "BLUE_FIRE",
 	"BAHHUM",
 	"ESTIUM", "ESTIUM_GAS",
-	"DDT", "ANT", "BEE", "HIVE", "HONEY", "SUGAR",
+	"DDT", "ANT", "DAMSELFLY", "BEE", "HIVE", "HONEY", "SUGAR",
 	"WATER", "ICE", "SNOW", "STAINED_SNOW", "SALT", "SALT_WATER",
 	"SAND", "KELP", "KELP_TOP", "PNEUMATOCYST",
 	"WOOD", "COAL", "OIL", "FUSE", "ASH",
@@ -57,43 +61,40 @@ const TYPES = Object.fromEntries([
 	"RADIUM", "ACTINIUM", "THORIUM",
 	"LIGHTNING", "LIGHT", "LIGHT_SAD",
 	"BLOOD", "MUSCLE", "BONE", "EPIDERMIS", "INACTIVE_NEURON", "ACTIVE_NEURON", "CEREBRUM",
-	"CORAL", "DEAD_CORAL", "CORAL_STIMULANT", "CORAL_BRANCH", "CORAL_HUB"
+	"CORAL", "DEAD_CORAL", "CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER"
 ].map((n, i) => [n, i]));
 
-const CELL = 3;
-
-class Cell {
-	constructor(id) {
-		this.id = id;
-		this.updated = false;
-		this.vel = new Vector2(0, 0);
-		// delete this.vel.x;
-		// delete this.vel.y;
-		// let _x = 0, _y = 0;
-		// Object.defineProperties(this.vel, {
-		// 	x: {
-		// 		get: () => _x,
-		// 		set: a => _x = a
-		// 	},
-		// 	y: {
-		// 		get: () => _y,
-		// 		set: a => {
-		// 			if (this.id === TYPES.SMOKE && a) debugger;
-		// 			_y = a;
-		// 		}
-		// 	}
-		// });
-		this.acts = 0;
-		this.reference = 0;
-	}
-}
+const ELEMENT_COUNT = Object.keys(TYPES).length;
 
 class WorldSave {
-	constructor(grid) {
+	static MAGIC_SAVE_CONSTANT_ELEMENT = 0xcc910831; // indicates elements are stored absolutely
+	static MAGIC_SAVE_CONSTANT_RIGIDBODY = 0xfebc1828;
+	constructor(grid, rigidbodies) {
 		this.grid = grid;
+		this.rigidbodies = rigidbodies;
+	}
+	static instantiateRigidbodies(bodies) {
+		for (let i = 0; i < bodies.length; i++) {
+			const body = bodies[i];
+			const obj = scene.main.addPhysicsElement("obj", 0, 0, true);
+			obj.transform.rotation = body.rotation;
+			obj.scripts.add(DYNAMIC_OBJECT, body.grid, body.upperLeft, Vector2.origin);
+
+		}
+	}
+	static getRigidbodies() {
+		return scene.main.getElementsWithScript(DYNAMIC_OBJECT)
+			.map(obj => {
+				const l = obj.scripts.DYNAMIC_OBJECT;
+				return {
+					rotation: obj.transform.rotation,
+					grid: l.grid.map(cell => cell.get()),
+					upperLeft: Vector2.floor(obj.transform.localSpaceToGlobalSpace(l.centerOfMass.inverse).over(CELL)).get()
+				};
+			});
 	}
 	toByteBuffer(buffer = new ByteBuffer()) {
-		buffer.write.uint32(WorldSave.MAGIC_SAVE_CONSTANT);
+		buffer.write.uint32(WorldSave.MAGIC_SAVE_CONSTANT_RIGIDBODY);
 		buffer.write.object(TYPES);
 		buffer.write.uint32(this.grid.length);
 		buffer.write.uint32(this.grid[0].length);
@@ -127,13 +128,36 @@ class WorldSave {
 
 		writeBlock();
 
+		const dyn = this.rigidbodies;
+
+		buffer.write.uint32(dyn.length);
+	
+		for (let i = 0; i < dyn.length; i++) {
+			const obj = dyn[i];
+			buffer.write.float64(obj.rotation);
+			obj.upperLeft.toByteBuffer(buffer);
+			buffer.write.uint32(obj.grid.length);
+			buffer.write.uint32(obj.grid[0].length);
+			for (let i = 0; i < obj.grid.length; i++) for (let j = 0; j < obj.grid[0].length; j++) {
+				const cell = obj.grid[i][j];
+				buffer.write.uint8(cell.id);
+				if (cell.id) {
+					buffer.write.uint8(cell.reference);
+					buffer.write.uint32(cell.acts);
+				}
+			}
+		}
+
 		return buffer;
 	}
 	static fromByteBuffer(buffer) {
 		let initial = buffer.read.uint32();
 		let width = initial;
 		let encodedTypes = TYPES;
-		if (initial === WorldSave.MAGIC_SAVE_CONSTANT) {
+		if (
+			initial === WorldSave.MAGIC_SAVE_CONSTANT_ELEMENT ||
+			initial === WorldSave.MAGIC_SAVE_CONSTANT_RIGIDBODY
+		) {
 			encodedTypes = buffer.read.object();
 			width = buffer.read.uint32();
 		}
@@ -145,7 +169,8 @@ class WorldSave {
 
 		const save = new WorldSave(
 			Array.dim(width, height)
-				.map(() => new Cell(TYPES.AIR))
+				.map(() => new Cell(TYPES.AIR)),
+			[]
 		);
 
 		let totalCells = 0;
@@ -171,16 +196,32 @@ class WorldSave {
 					}
 				}
 			} else {
-				for (let i = 0; i < duration; i++) {
-					y++;
-					if (y === height) {
-						y = 0;
-						x++;
-					}
-				}
+				y += duration;
+				x += ~~(y / height);
+				y %= height;
 				continue;
 			}
 
+		}
+
+		if (initial === WorldSave.MAGIC_SAVE_CONSTANT_RIGIDBODY) {
+			const rigidbodyCount = buffer.read.uint32();
+			for (let i = 0; i < rigidbodyCount; i++) {
+				const obj = {};
+				obj.rotation = buffer.read.float64();
+				obj.upperLeft = Vector2.fromByteBuffer(buffer);
+				obj.grid = Array.dim(buffer.read.uint32(), buffer.read.uint32())
+					.map(() => new Cell(TYPES.AIR));
+				for (let i = 0; i < obj.grid.length; i++) for (let j = 0; j < obj.grid[0].length; j++) {
+					const cell = obj.grid[i][j];
+					cell.id = buffer.read.uint8();
+					if (cell.id) {
+						cell.reference = buffer.read.uint8();
+						cell.acts = buffer.read.uint32();
+					}
+				}
+				save.rigidbodies.push(obj);
+			}
 		}
 
 		return save;
@@ -191,13 +232,509 @@ const SAVE_FILE_PATH = "world.sand";
 
 fileSystem.createFileType(WorldSave, ["sand"]);
 
+class Cell {
+	constructor(id) {
+		this.id = id;
+		this.updated = false;
+		this.vel = new Vector2(0, 0);
+		// delete this.vel.x;
+		// delete this.vel.y;
+		// let _x = 0, _y = 0;
+		// Object.defineProperties(this.vel, {
+		// 	x: {
+		// 		get: () => _x,
+		// 		set: a => _x = a
+		// 	},
+		// 	y: {
+		// 		get: () => _y,
+		// 		set: a => {
+		// 			if (this.id === TYPES.SMOKE && a) debugger;
+		// 			_y = a;
+		// 		}
+		// 	}
+		// });
+		this.acts = 0;
+		this.reference = 0;
+	}
+	get(result = new Cell()) {
+		result.id = this.id;
+		result.reference = this.reference;
+		result.acts = this.acts;
+		result.vel.set(this.vel);
+		return result;
+	}
+	sameType(cell) {
+		if (cell.id !== this.id) return false;
+		if (DATA[cell.id].reference && cell.reference !== this.reference) return false;
+		return true;
+	}
+}
+
+const CELL = 3;
+
 const grid = Array.dim(width / CELL, height / CELL)
 	.map(() => new Cell(TYPES.AIR));
 
-
-
 const WIDTH = grid.length;
 const HEIGHT = grid[0].length;
+
+class DYNAMIC_OBJECT extends ElementScript {
+	static RES = 2;
+	static SKIP = 20;
+	static DISTRIBUTION = 8;
+	static nextSlot = 0;
+	init(obj, grid, upperLeft, textureOffset) {
+		obj.scripts.removeDefault();
+		this.rb = obj.scripts.PHYSICS;
+		this.colors = new Map();
+		this.textureOffset = textureOffset ?? upperLeft.get();
+		obj.transform.position = upperLeft.times(CELL);
+		this.centerOfMass = Vector2.origin;
+		this.setGrid(grid, Vector2.origin);
+		this.slot = (DYNAMIC_OBJECT.nextSlot++) % DYNAMIC_OBJECT.DISTRIBUTION;
+		this.collidingObjects = new Map();
+	}
+	static computeCenterOfMass(grid) {
+		const centerOfMass = Vector2.origin;
+		let total = 0;
+		for (let i = 0; i < grid.length; i++) for (let j = 0; j < grid[0].length; j++) {
+			if (grid[i][j].id) {
+				total++;
+				centerOfMass.x += i;
+				centerOfMass.y += j;
+			}
+		}
+		return centerOfMass.mul(CELL / total);
+	}
+	collideGeneral(obj, { element }) {
+		if (!this.collidingObjects.has(element)) {
+			this.collidingObjects.set(element);
+			
+			const momentum = obj.scripts.PHYSICS.mass + element.scripts.PHYSICS.mass;
+			synth.play({
+				duration: 10,
+				frequency: Random.range(600, 800),
+				volume: momentum / (width * height / 16),
+				wave: "sine",
+				fadeOut: 100
+			});
+		}
+	}
+	setGrid(obj, grid, gridOffset) {
+		this.grid = grid;
+
+		obj.transform.position = obj.transform.localSpaceToGlobalSpace(this.centerOfMass.inverse);
+		this.centerOfMass = DYNAMIC_OBJECT.computeCenterOfMass(this.grid);
+		obj.transform.position = obj.transform.localSpaceToGlobalSpace(this.centerOfMass.plus(gridOffset));
+
+		this.width = this.grid.length;
+		this.height = this.grid[0].length;
+		this.gridBounds = new Rect(-this.centerOfMass.x, -this.centerOfMass.y, this.width * CELL, this.height * CELL);
+		this.smallGrid = Array.dim(
+			Math.ceil(this.width / DYNAMIC_OBJECT.RES),
+			Math.ceil(this.height / DYNAMIC_OBJECT.RES)
+		).fill(false);
+		this.skipGrid = Array.dim(
+			Math.floor(this.width / DYNAMIC_OBJECT.SKIP),
+			Math.floor(this.height / DYNAMIC_OBJECT.SKIP)
+		).map((_, x, y) => {
+			x *= DYNAMIC_OBJECT.SKIP;
+			y *= DYNAMIC_OBJECT.SKIP;
+			for (let i = 0; i < DYNAMIC_OBJECT.SKIP; i++)
+			for (let j = 0; j < DYNAMIC_OBJECT.SKIP; j++) {
+				if (this.grid[x + i][y + j].id)
+					return false;
+			}
+			return true;
+		});
+
+		for (let i = 0; i < this.width; i++) for (let j = 0; j < this.height; j++) {
+			const cell = this.grid[i][j];
+			if (cell.id && !this.colors.has(cell))
+				this.colors.set(cell, DATA[cell.id].getColor(
+					this.textureOffset.x + i,
+					this.textureOffset.y + j
+				).get());
+		}
+	}
+	explode(obj, ox, oy, r, vel) {
+		if (!obj.defaultShape) return;
+		const v = new Vector2(ox, oy).times(CELL);
+		const closest = obj.getModel("default").closestPointTo(v);
+		const diff = closest.minus(v);
+		if (diff.mag > r * CELL) return;
+		this.rb.applyImpulseMass(closest, diff.times(vel));
+	}
+	forEachCell(obj, fn) {
+		const { grid, skipGrid } = this;
+		const { SKIP } = DYNAMIC_OBJECT;
+
+		const gridBounds = this.gridBounds
+			.getModel(obj.transform)
+			.scaleAbout(Vector2.origin, 1 / CELL);
+		const bounds = gridBounds.getBoundingBox();
+		const globalMin = new Vector2(0, 0);
+		const globalMax = new Vector2(WIDTH - 1, HEIGHT - 1);
+		const min = Vector2.clamp(Vector2.floor(bounds.min), globalMin, globalMax);
+		const max = Vector2.clamp(Vector2.ceil(bounds.max), globalMin, globalMax);
+		const c = new Vector2(0, 0);
+		const local = new Vector2(0, 0);
+		const toLocal = Matrix3.mulMatrices([
+			Matrix3.scale(1 / CELL),
+			Matrix3.translation(this.centerOfMass),
+			obj.transform.inverse,
+			Matrix3.scale(CELL)
+		]);
+		
+		const localDY = new Vector2(toLocal.m01, toLocal.m11);
+
+		// border precomputing
+		const edges = gridBounds
+			.getEdges()
+			.sort((a, b) => a.middle.y - b.middle.y);
+	
+		let topEdgeLeft = edges[0];
+		let topEdgeRight = edges[1];
+		if (topEdgeRight.middle.x < topEdgeLeft.middle.x)
+			[topEdgeLeft, topEdgeRight] = [topEdgeRight, topEdgeLeft];
+	
+		let bottomEdgeLeft = edges[2];
+		let bottomEdgeRight = edges[3];
+		if (bottomEdgeRight.middle.x < bottomEdgeLeft.middle.x)
+			[bottomEdgeLeft, bottomEdgeRight] = [bottomEdgeRight, bottomEdgeLeft];
+	
+		const topCutoff = topEdgeLeft.b.x;
+		const bottomCutoff = bottomEdgeLeft.a.x;
+	
+		let top = topEdgeLeft;
+		let bottom = bottomEdgeLeft;
+	
+		// skip grid precomputing
+		const angle = Geometry.normalizeAngle(obj.transform.rotation);
+		const skipRadius = SKIP * Math.SQRT1_2;
+		const modAngle = Math.PI / 4 + (angle % (Math.PI / 2));
+		const offAngle = Math.PI / 4 + angle;
+		const vertexOffsetX = (Math.cos(modAngle) + Math.cos(offAngle)) * skipRadius;
+		const vertexOffsetY = (Math.sin(modAngle) + Math.sin(offAngle)) * skipRadius;
+		const leftSkipSlope = Math.tan((angle % (Math.PI / 2)));
+		const rightSkipSlope = Math.tan((angle % (Math.PI / 2)) + Math.PI / 2);
+		const skipToVertex = Matrix3.mulMatrices([
+			Matrix3.translation(vertexOffsetX, vertexOffsetY),
+			toLocal.inverse,
+			Matrix3.scale(SKIP)
+		]);
+		const skip = new Vector2(0, 0);
+		const vertex = new Vector2(0, 0);
+	
+		for (c.x = min.x; c.x <= max.x; c.x++) {
+			if (c.x > topCutoff) top = topEdgeRight;
+			if (c.x > bottomCutoff) bottom = bottomEdgeRight;
+			const minY = Math.max(Math.ceil(top.evaluate(c.x)), min.y);
+			const maxY = Math.min(Math.ceil(bottom.evaluate(c.x)) - 1, max.y);
+			c.y = minY;
+			toLocal.times(c, local);
+			for (; c.y <= maxY; c.y++) {
+				local.add(localDY);
+				const lx = Math.floor(local.x);
+				const ly = Math.floor(local.y);
+				const cell = grid[lx]?.[ly];
+				if (cell?.id) fn(cell, c.x, c.y);
+				else {
+					skip.x = Math.floor(lx / SKIP);
+					skip.y = Math.floor(ly / SKIP);
+					if (skipGrid[skip.x]?.[skip.y]) {
+						skipToVertex.times(skip, vertex);
+						const slope = c.x > vertex.x ? rightSkipSlope : leftSkipSlope;
+						const intersectY = (c.x - vertex.x) * slope + vertex.y;
+						c.y = Math.floor(intersectY);
+					}
+				}
+			}
+		}
+
+		// const iCell = 1 / CELL;
+		// const bounds = this.gridBounds
+		// 	.getModel(obj.transform)
+		// 	.scaleAbout(Vector2.origin, iCell)
+		// 	.getBoundingBox();
+		// const boundsMin = new Vector2(0, 0);
+		// const boundsMax = new Vector2(WIDTH - 1, HEIGHT - 1);
+		// const min = Vector2.clamp(Vector2.floor(bounds.min), boundsMin, boundsMax);
+		// const max = Vector2.clamp(Vector2.ceil(bounds.max), boundsMin, boundsMax);
+		// const toLocal = Matrix3.mulMatrices([
+		// 	Matrix3.translation(this.centerOfMass.x * iCell, this.centerOfMass.y * iCell),
+		// 	Matrix3.scale(iCell, iCell),
+		// 	obj.transform.inverse,
+		// 	Matrix3.scale(CELL, CELL)
+		// ]);
+		// const c = new Vector2(0, 0);
+		// const local = new Vector2(0, 0);
+		// for (c.x = min.x; c.x <= max.x; c.x++) {
+		// 	for (c.y = min.y; c.y <= max.y; c.y++) {
+		// 		toLocal.times(c, local);
+		// 		let { x, y } = local;
+		// 		if (x >= 0 && y >= 0 && x < this.width && y < this.height) {
+		// 			const cell = this.grid[~~x][~~y];
+		// 			if (cell.id) fn(cell, c.x, c.y);
+		// 		}
+		// 	}
+		// }
+	}
+	removeIfNecessary(obj) {
+		if ((obj.defaultShape && !obj.getBoundingBox().intersect(new Rect(0, 0, width, height))) || isNaN(obj.transform.position)) {
+			obj.remove();
+			return true;
+		}
+		return false;
+	}
+	inject(obj) {
+		if ((obj.defaultShape && !obj.getBoundingBox().intersect(new Rect(0, 0, width, height))) || isNaN(obj.transform.position)) {
+			obj.remove();
+			return;
+		}
+		
+		this.forEachCell((cell, x, y) => {
+			const c = grid[x][y];
+			if (c.id && !STATIC_SOLID.has(c.id))
+				createParticle(new Vector2(x, y), new Vector2(Random.range(-1, 1), Random.range(-1, 1)));
+			cell.get(c);
+			Element.updateCell(x, y);
+		});
+	}
+	extract(obj) {
+		this.forEachCell((cell, x, y) => {
+			if (grid[x][y].sameType(cell)) {
+				Element.die(x, y);
+				tex.shaderSetPixel(x, y, this.colors.get(cell));
+			} else cell.id = TYPES.AIR;
+		});
+		tex.loaded = false;
+
+		const { defaultShape } = obj;
+
+		for (let i = 0; i < this.width; i += DYNAMIC_OBJECT.RES)
+		for (let j = 0; j < this.height; j += DYNAMIC_OBJECT.RES) {
+			const sx = ~~(i / DYNAMIC_OBJECT.RES);
+			const sy = ~~(j / DYNAMIC_OBJECT.RES);
+			this.smallGrid[sx][sy] = this.grid[i][j].id !== TYPES.AIR;
+		}
+
+		const extractSubGrid = shape => {
+			const bounds = shape.getBoundingBox();
+
+			const grid = Array.dim(
+				Math.ceil(1 + bounds.width) * DYNAMIC_OBJECT.RES,
+				Math.ceil(1 + bounds.height) * DYNAMIC_OBJECT.RES
+			).map(() => new Cell(TYPES.AIR));
+
+			let {
+				xRange: { min: minX, max: maxX },
+				yRange: { min: minY, max: maxY }
+			} = bounds;
+			minX = Math.floor(minX);
+			minY = Math.floor(minY);
+			maxX = Math.ceil(maxX) + 1;
+			maxY = Math.ceil(maxY) + 1;
+
+			const edges = shape.getEdges()
+				.filter(edge => edge.a.x !== edge.b.x);
+
+			
+			for (let i = minX; i <= maxX; i++) {
+				const stops = edges
+					.filter(edge => edge.a.x > edge.b.x ? edge.b.x <= i && i < edge.a.x : edge.a.x <= i && i < edge.b.x)
+					.map(edge => edge.a.y === edge.b.y ? edge.a.y : edge.evaluate(i))
+					.sort((a, b) => a - b);
+	
+				for (let n = 0; n < stops.length; n += 2) {
+					const startY = Math.floor(stops[n]) - 1;
+					const endY = Math.ceil(stops[n + 1]);
+					for (let j = startY; j <= endY; j++) {
+						for (let ii = 0; ii < DYNAMIC_OBJECT.RES; ii++)
+						for (let jj = 0; jj < DYNAMIC_OBJECT.RES; jj++) {
+							const x = i * DYNAMIC_OBJECT.RES + ii;
+							const y = j * DYNAMIC_OBJECT.RES + jj;
+							if (x >= 0 && y >= 0 && x < this.width && y < this.height) {
+								grid[x - minX * DYNAMIC_OBJECT.RES][y - minY * DYNAMIC_OBJECT.RES] = this.grid[x][y];
+								this.grid[x][y] = new Cell(TYPES.AIR);
+							}
+						}
+					}
+				}
+			}
+
+			return grid;
+		};
+
+		const shapes = Geometry.gridToExactPolygons(this.smallGrid, 1)
+			.filter(shape => shape.area > 2 ** 2)
+			.map(shape => Geometry.simplify(shape, 0.5))
+			.sort((a, b) => a.area - b.area);
+		
+		if (!shapes.length) {
+			obj.remove();
+			return;
+		}
+
+		const inflateDist = CELL;//Math.SQRT2 * CELL;
+
+		if (shapes.length === 1 && intervals.frameCount % DYNAMIC_OBJECT.DISTRIBUTION !== this.slot) {
+			const newCenterOfMass = DYNAMIC_OBJECT.computeCenterOfMass(this.grid);
+			obj.transform.position = obj.transform.localSpaceToGlobalSpace(newCenterOfMass.minus(this.centerOfMass));
+		
+			this.centerOfMass = newCenterOfMass;
+			this.gridBounds.x = -this.centerOfMass.x;
+			this.gridBounds.y = -this.centerOfMass.y;
+
+			const newShape = Geometry.inflate(
+				shapes[0]
+					.scaleAbout(Vector2.origin, CELL * DYNAMIC_OBJECT.RES)
+					.move(this.centerOfMass.inverse),
+				inflateDist
+			);
+
+			let shouldReplace = !defaultShape;
+			if (!shouldReplace)
+				shouldReplace = newShape.vertices.length !== defaultShape.vertices.length;
+			if (!shouldReplace) {
+				const totalDist = newShape.vertices
+					.map((v, i) => Vector2.sqrDist(v, defaultShape.vertices[i]))
+					.reduce((a, b) => a + b, 0);
+				shouldReplace = totalDist > 1;
+			}
+
+			if (shouldReplace)
+				obj.defaultShape = newShape;
+		} else for (let i = 0; i < shapes.length; i++) {
+			let shape = shapes[i];
+			const subgrid = extractSubGrid(shape);
+			shape = shape
+				.scaleAbout(Vector2.origin, CELL * DYNAMIC_OBJECT.RES);
+			
+			const gridOffset = shape.getBoundingBox().min;
+			shape = Geometry.inflate(shape, inflateDist);
+
+			if (i === shapes.length - 1) { // guarentee other things have been placed before moving
+				this.setGrid(subgrid, gridOffset);
+				obj.defaultShape = shape.move(this.centerOfMass.plus(gridOffset).inverse);
+			} else {
+				const obj2 = scene.main.addPhysicsElement("obj", 0, 0, true);
+				obj2.transform.rotation = obj.transform.rotation;
+				const pos = Vector2.floor(obj.transform.localSpaceToGlobalSpace(gridOffset.minus(this.centerOfMass)).over(CELL));
+				obj2.scripts.add(
+					DYNAMIC_OBJECT, subgrid, pos, this.textureOffset.plus(Vector2.floor(gridOffset.over(CELL)))
+				);
+				obj2.defaultShape = shape.move(obj2.scripts.DYNAMIC_OBJECT.centerOfMass.plus(gridOffset).inverse);
+			}
+		}
+		
+	}
+	update(obj) {
+		const { rb } = this;
+		rb.mobile = !paused;
+		for (const [key, count] of this.collidingObjects)
+			this.collidingObjects.set(key, count - 1);
+	}
+	draw(obj, name, shape) {
+		if (keyboard.pressed("c")) {
+			renderer.stroke(Color.RED).infer(shape);
+			renderer.draw(Color.RED).circle(0, 0, CELL);
+			renderer.stroke(new Color(255, 255, 0, 0.5), CELL).rect(this.gridBounds);
+		}
+		// renderer.drawThrough(obj.transform, () => {
+		// 	renderer.image(this.tex).rect(this.gridBounds);
+		// });
+	}
+	escapeDraw(obj) {
+		// this.forEachCell((cell, x, y) => {
+		// 	console.log(x, y);
+		// 	renderer.draw(Color.BLUE).circle(x * CELL, y * CELL, CELL / 2);
+		// });
+	}
+}
+
+class CHUNK_COLLIDER extends ElementScript {
+	static RES = 3;
+	static MIN_FILL_PERCENT = 0.05;
+	static MIN_SHAPE_AREA_PERCENT = 0.03;
+	static DISTRIBUTION = 4;
+	static nextSlot = 0;
+	static isSolid(cell) {
+		if (cell.id === TYPES.ELECTRICITY) return SOLID.has(cell.reference);
+		return SOLID.has(cell.id) && !cell.vel.sqrMag;
+	}
+	init(obj, pos, chunk) {
+		obj.scripts.removeDefault();
+		this.offset = pos.times(CHUNK);
+		this.size = ~~(CHUNK / CHUNK_COLLIDER.RES);
+		this.grid = Array.dim(this.size, this.size).fill(false);
+		this.chunk = chunk;
+		this.area = this.size ** 2;
+		this.slot = (CHUNK_COLLIDER.nextSlot++) % CHUNK_COLLIDER.DISTRIBUTION;
+		this.shouldUpdate = false;
+		obj.mouseEvents = false;
+	}
+	remesh(obj) {
+		this.shouldUpdate = false;
+
+		let solid = 0;
+		for (let i = 0; i < this.size; i++)
+		for (let j = 0; j < this.size; j++) {
+			const x = this.offset.x + i * CHUNK_COLLIDER.RES;
+			const y = this.offset.y + j * CHUNK_COLLIDER.RES;
+			if (!Element.inBounds(x, y)) continue;
+			const cell = grid[x][y];
+			const isSolid = CHUNK_COLLIDER.isSolid(cell);
+			this.grid[i][j] = isSolid;
+			if (isSolid) solid++;
+		}
+
+		obj.removeAllShapes();
+
+		if (solid < this.area * CHUNK_COLLIDER.MIN_FILL_PERCENT) return;
+
+		const shapes = Geometry.gridToExactPolygons(this.grid, CELL * CHUNK_COLLIDER.RES);
+		for (let i = 0; i < shapes.length; i++) {
+			const shape = shapes[i];
+			if (shape.area < CHUNK_COLLIDER.MIN_SHAPE_AREA_PERCENT * this.area * (CHUNK_COLLIDER.RES * CELL) ** 2)
+				continue;
+			obj.addShape(String(i), Geometry.joinEdges(shape, 0.5));
+		}
+	}
+	update(obj) {
+		this.shouldUpdate ||= !this.chunk.sleep;
+		if (!this.shouldUpdate)
+			return;
+		if (intervals.frameCount % CHUNK_COLLIDER.DISTRIBUTION !== this.slot)
+			return;
+		
+		this.remesh();
+	}
+	draw(obj, name, shape) {
+		if (keyboard.pressed("c")) renderer.stroke(Color.CYAN, 2).infer(shape);
+	}
+}
+
+{ // walls
+	const floor = scene.main.addPhysicsRectElement("floor", width / 2, height + 50, width + 200, 100, false, new Controls("w", "s", "a", "d"), "No Tag");
+	const ceiling = scene.main.addPhysicsRectElement("ceiling", width / 2, -50, width + 200, 100, false, new Controls("w", "s", "a", "d"), "No Tag");
+	const leftWall = scene.main.addPhysicsRectElement("leftWall", -50, height / 2, 100, height, false, new Controls("w", "s", "a", "d"), "No Tag");
+	const rightWall = scene.main.addPhysicsRectElement("rightWall", width + 50, height / 2, 100, height, false, new Controls("w", "s", "a", "d"), "No Tag");
+};
+
+// intervals.continuous(time => {
+// 	if (keyboard.pressed("Control") && mouse.justPressed("Left") && STATIC_SOLID.has(brush)) {
+// 		const obj = scene.main.addPhysicsElement("obj", 0, 0, true, new Controls("w", "s", "a", "d"), "No Tag");
+// 		const radius = Math.ceil(Random.range(10, 20));
+// 		const grid = Array.dim(radius * 2 + 1, radius * 2 + 1);
+// 		for (let i = -radius; i <= radius; i++) {
+// 			for (let j = -radius; j <= radius; j++) {
+// 				grid[i + radius][j + radius] = new Cell(i ** 2 + j ** 2 < radius ** 2 ? brush : TYPES.AIR);
+// 			}
+// 		}
+// 		obj.scripts.add(DYNAMIC_OBJECT, grid, Vector2.floor(mouse.world.over(CELL)).minus(radius));
+// 	}
+// }, IntervalFunction.AFTER_UPDATE);
 
 class Chunk {
 	constructor(x, y) {
@@ -205,6 +742,8 @@ class Chunk {
 		this.y = y;
 		this.sleep = false;
 		this.sleepNext = true;
+		this.sceneObject = scene.main.addPhysicsElement("chunk", x * CHUNK * CELL, y * CHUNK * CELL, false);
+		this.sceneObject.scripts.add(CHUNK_COLLIDER, new Vector2(x, y), this);
 	}
 }
 
@@ -220,7 +759,6 @@ const CHUNK_HEIGHT = chunks[0].length;
 const lastIds = Array.dim(WIDTH, HEIGHT)
 	.fill(TYPES.AIR);
 
-const NUM_TYPES = Object.entries(TYPES).length;
 
 class Element {
 	static DEFAULT_PASS_THROUGH = new Set([TYPES.AIR]);
@@ -274,8 +812,18 @@ class Element {
 
 	burn(x, y, fireType, burn = false) {
 		if (burn || Random.bool(this.flammability)) {
-			if (!this.onburn(x, y)) Element.setCell(x, y, fireType);
-			else {
+			if (Random.bool(0.05))
+				synth.play({
+					frequency: 20,
+					volume: Random.range(0.14, 0.3),
+					duration: Random.range(30, 45),
+					fadeOut: 300,
+					wave: "sawtooth"
+				});
+
+			if (!this.onburn(x, y)) { 
+				Element.setCell(x, y, fireType);
+			} else {
 				Element.affectNeighbors(x, y, (x, y) => {
 					if (Element.isType(x, y, fireType)) Element.setCell(x, y, TYPES.AIR);
 				});
@@ -463,6 +1011,15 @@ class Element {
 		}
 	}
 
+	static probabilityAffectNeighbors(x, y, effect, range, samples) {
+		for (let i = 0; i < samples; i++) {
+			const ox = x + Random.int(-range, range);
+			const oy = y + Random.int(-range, range);
+			if (x !== ox && y !== oy && Element.inBounds(ox, oy) && grid[ox][oy].id !== TYPES.AIR)
+				effect(ox, oy);
+		}
+	}
+
 	static tryBurn(x, y, type) {
 		const cell = grid[x][y];
 		if (cell.id !== type) {
@@ -514,6 +1071,8 @@ class Element {
 		const cell = grid[x][y];
 		cell.id = cell.reference;
 		cell.reference = 0;
+		cell.vel.mul(0);
+		cell.acts = 0;
 		Element.updateCell(x, y);
 	}
 
@@ -687,8 +1246,10 @@ class Element {
 const GRAVITY = 0.5 / CELL;
 const DISPERSION = 4;
 
-const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT]);
-const LIQUID = new Set([TYPES.ORANGEJUICE, TYPES.WATER, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
+scene.physicsEngine.gravity.y = GRAVITY * CELL;
+
+const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT, TYPES.INCENSE_SMOKE]);
+const LIQUID = new Set([TYPES.WATER, TYPES.LAVA, TYPES.POWER_LAVA, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
 const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE]);
 const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, ...GAS]);
 const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL, TYPES.ESTIUM]);
@@ -714,10 +1275,130 @@ const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM, TYPES.ACTINIUM, TY
 const NEURON = new Set([TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON])
 const BRAIN = new Set([...NEURON, TYPES.CEREBRUM])
 const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD, TYPES.BONE])
+const THICKETS = new Set([TYPES.THICKET, TYPES.INCENSE, TYPES.THICKET_BUD, TYPES.THICKET_SEED, TYPES.INCENSE_SMOKE, TYPES.THICKET_STEM]);
+const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS]);
 
-const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR,TYPES.AIR]);
-const HEAT = new Set([TYPES.FIRE,TYPES.BLUE_FIRE,TYPES.LAVA,TYPES.POWER_LAVA,TYPES.EXOTHERMIA]);
-const GERMANIUM_PASSTHROUGH = new Set([TYPES.GERMANIUM]);
+function updatePixel(x, y) {
+	tex.setPixel(x, y, DATA[grid[x][y].id].getColor(x, y));
+}
+
+class Particle {
+	constructor(position, velocity) {
+		this.cell = grid[position.x][position.y].get();
+		this.velocity = velocity ?? this.cell.vel.get();
+		this.cell.vel.mul(0);
+		Element.die(position.x, position.y);
+		this.position = position;
+		this.color = DATA[this.cell.id].getColor(position.x, position.y).get();
+		this.lastPosition = this.position.get();
+		this.submerged = false;
+	}
+	remove() {
+		updatePixel(Math.floor(this.lastPosition.x), Math.floor(this.lastPosition.y));
+		updatePixel(Math.floor(this.position.x), Math.floor(this.position.y));
+	}
+	solidify() {
+		const { x, y } = Vector2.floor(this.position);
+		this.cell.get(grid[x][y]);
+		Element.updateCell(x, y);
+	}
+	move(blocked, onBlocked, onAir) {
+		// const f = Vector2.floor(this.position.plus(this.velocity));
+
+		// if (blocked(f.x, f.y)) {
+			const { mag } = this.velocity;
+			const dir = this.velocity.over(mag);
+			for (let i = 0; i < mag + 1; i++) {
+				this.position.add(dir);
+				let fx = Math.floor(this.position.x);
+				let fy = Math.floor(this.position.y);
+				if (!Element.inBounds(fx, fy) || blocked(fx, fy)) {
+					this.position.sub(dir);
+
+					if (onBlocked && !blocked(Math.floor(this.position.x), Math.floor(this.position.y)))
+						return onBlocked();
+					
+				} else if (onAir && grid[fx][fy].id === TYPES.AIR)
+					return onAir();
+			}
+		// }
+		// this.position.add(this.velocity);
+		return false;
+	}
+	bounce() {
+		const scale = 1;
+		this.velocity = Vector2.fromAngle(Random.angle()).mul(scale);
+	}
+	update() {
+		this.position.get(this.lastPosition);
+		
+		const { id } = grid[Math.floor(this.position.x)][Math.floor(this.position.y)];
+
+		if (id === TYPES.AIR) {
+			this.velocity.y += GRAVITY;
+			if (this.submerged) {
+				this.solidify();
+				return false;
+			}
+			if (this.move(
+				(x, y) => grid[x][y].id !== TYPES.AIR,
+				() => (this.solidify(), true)
+			)) return false;
+		} else {
+			this.submerged = true;
+			if (!SOLID.has(id)) {
+				if (this.move(
+					(x, y) => SOLID.has(grid[x][y].id),
+					() => (this.bounce(), false),
+					() => (this.solidify(), true)
+				)) return false;
+			} else {
+				if (this.move(
+					(x, y) => false,
+					() => false,
+					() => (this.solidify(), true)
+				)) return false;
+			}
+			
+		}
+
+		const { x, y } = Vector2.floor(this.position);
+		const cx = Number.clamp(x, 0, WIDTH - 1);
+		const cy = Number.clamp(y, 0, HEIGHT - 1);
+
+		if (cx !== x || cy !== y) {
+			this.position.x = cx;
+			this.position.y = cy;
+			
+			if (grid[cx][cy].id === TYPES.AIR) {
+				this.solidify();
+				return false;
+			}
+			
+			this.bounce();
+		}
+
+		return true;
+	}
+	draw() {
+		const { x, y } = Vector2.floor(this.position);
+		
+		updatePixel(Math.floor(this.lastPosition.x), Math.floor(this.lastPosition.y));
+
+		if (grid[x][y].id === TYPES.AIR)
+			tex.setPixel(x, y, this.color);//new Color(0, 255, 0, Color.EPSILON));
+		// renderer.draw(this.color).rect(Math.floor(this.position.x) * CELL, Math.floor(this.position.y) * CELL, CELL, CELL);
+		// renderer.stroke(Color.RED).arrow(Math.floor(this.position.x) * CELL, Math.floor(this.position.y) * CELL, Math.floor(this.position.x + this.velocity.x) * CELL, Math.floor(this.position.y + this.velocity.y) * CELL);
+		// renderer.stroke(Color.RED, 1).rect(Math.floor(this.position.x) * CELL, Math.floor(this.position.y) * CELL, CELL, CELL);
+	}
+}
+
+let particles = [];
+
+function createParticle(position, velocity) {
+	particles.push(new Particle(position, velocity));
+}
+
 const genderfluidFlag = flag([
 	"#FF76A401",
 	"#FFFFFF01",
@@ -748,7 +1429,7 @@ const fluidUpdate = (x, y, direction, accel, passthrough) => {
 	} else {
 		if (vel.y > 5) {
 			vel.rotate(Random.angle()).div(2);
-			Element.setCellId(x, y, TYPES.PARTICLE);
+			createParticle(new Vector2(x, y));
 			return;
 		}
 
@@ -778,13 +1459,90 @@ const fluidUpdate = (x, y, direction, accel, passthrough) => {
 	} else vel.y = 0;
 };
 
-function beeUpdate(x, y, passthrough) {
+function chaosUpdate(x, y, passthrough) {
 	const angle = Random.angle();
 	const cos = Math.cos(angle);
 	const sin = Math.sin(angle);
 	if (!Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin), passthrough))
 		Element.updateCell(x, y);
 }
+
+const boidUpdate = (x, y, maxSpeed = 4, accuracy = 1, passthrough) => { // by val (mostly)
+	const cell = grid[x][y];
+	const type = cell.id;
+	const cellPV = new Vector2(x,y); 
+
+	//variables
+	const separationRadius = 10;
+	const separation = 2;
+	const cohersion = 10; //over some value
+	const alignment = 2;
+	const jitterRange = 0.1;
+	const boundingRange = 25;
+	const boundingStrength = 0.003;
+	const samplingRange = 30;
+	const samplingAmount = 40 * accuracy;
+
+
+	//rules
+	let cohesionV = new Vector2(0, 0); //cohesion
+	let separationV = new Vector2(0, 0); //seperation
+	let alignmentV = new Vector2(0, 0);	//alignment
+	cell.vel.rotate(Random.range(-jitterRange, jitterRange));
+	cell.vel.mag += Random.range(-jitterRange, jitterRange);
+	let boundingV = new Vector2(0,0); //bounding
+	
+	//boundary code
+	// if (cellPV.x < boundingRange || cellPV.x > WIDTH-boundingRange || cellPV.y < boundingRange || cellPV.y > HEIGHT-boundingRange){
+	// 	// cell.vel.rotate(boundingStrength);
+	// 	cell.vel.add(new Vector2(WIDTH / 2, HEIGHT / 2).minus(cellPV).times(boundingStrength))
+	// }
+
+	let count = 0;
+	Element.probabilityAffectNeighbors(x, y, (ox, oy) => {
+		if(Element.isType(ox,oy,type)){
+			count++;
+			const otherBoidPV = new Vector2(ox,oy);
+			const otherBoidCell = grid[ox][oy];
+
+			//rule 1, going towards center of flock
+			cohesionV = cohesionV.add(otherBoidPV);
+
+			//rule 2, avoid collision with other boids
+			if (otherBoidPV.minus(cellPV).mag < separationRadius) {
+				separationV.add(cellPV.minus(otherBoidPV));
+			}
+
+			//rule 3, try to match velocity of surrounding boids
+			alignmentV = alignmentV.add(otherBoidCell.vel);
+		}
+	}, samplingRange, samplingAmount);
+	
+	if (count > 0) {
+		//position correction
+		cohesionV.div(count); 
+		cohesionV.sub(cellPV).normalize().div(cohersion); 
+
+		separationV.div(count);
+		separationV.div(separation);
+
+		//velocity correction
+		alignmentV.div(count);
+		alignmentV.sub(cell.vel).div(alignment)
+	}
+
+	//to add more rules add the vectors to the sum
+	cell.vel.add(Vector2.sum([cohesionV, separationV, alignmentV,boundingV]));
+	cell.vel.mag = Number.clamp(cell.vel.mag, 1, maxSpeed);
+	// cell.vel.mul(0.95);
+	const dx = Math.round(cell.vel.x); 
+	const dy = Math.round(cell.vel.y);
+	if (!Element.tryMove(x, y, x + dx, y + dy, passthrough)) {
+		cell.vel.invert();
+		Element.updateCell(x, y);
+	}
+}
+
 
 const fireUpdate = (x, y, type, up = true) => {
 	let neighbors = 0;
@@ -843,7 +1601,7 @@ const solidUpdate = (x, y, g = GRAVITY, dxShiftChance = 0, tryMove = Element.try
 		else{
 			if (vel.y > 4) {
 				vel.rotate(Random.angle()).div(5);
-				Element.setCellId(x, y, TYPES.PARTICLE);
+				createParticle(new Vector2(x, y));
 				return;
 			}
 			vel.y = 0;
@@ -881,6 +1639,22 @@ function makeLine(x, y, x1, y1, id, r = 10, chance = 0.2, passthrough = undefine
 	}
 }
 
+function weedBranch(x1, y1, x2, y2, id){
+	let N = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1))
+	let ox;
+	let oy;
+	for (let step = 0; step <= N; step++) {
+		let t = N === 0 ? 0.0 : step / N;
+		ox = Math.round(x1 * (1.0 - t) + t * x2);
+		oy = Math.round(y1 * (1.0 - t) + t * y2);
+		if(Element.isEmpty(ox, oy)){
+			Element.setCell(ox, oy, id)
+			grid[ox][oy].acts = -1;
+		}
+	}
+}
+
+
 const EXPLOSION_PASSTHROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.LIGHTNING, TYPES.AIR]);
 EXPLOSION_PASSTHROUGH.delete(TYPES.BLUE_FIRE);
 EXPLOSION_PASSTHROUGH.delete(TYPES.FIRE);
@@ -898,26 +1672,24 @@ function explodeLine(x, y, x1, y1, vel, passthrough) {
 		if (!Element.inBounds(ox, oy)) break;
 
 		if (!Element.isEmpty(ox, oy, passthrough)) {
-			const cell = grid[ox][oy];
-			const base = cell.id === TYPES.PARTICLE ? cell.reference : cell.id;
-
-			if (Random.bool(DATA[cell.id].getResistance(ox, oy)))
+			if (Random.bool(DATA[grid[ox][oy].id].getResistance(ox, oy)))
 				break;
 
-			cell.id = TYPES.PARTICLE;
-			cell.reference = base;
 			const CHAOS = 10 * (vel);
-			cell.vel.set(
+			createParticle(new Vector2(ox, oy), new Vector2(
 				dx * t * vel + Random.range(-CHAOS, CHAOS),
 				dy * t * vel + Random.range(-CHAOS, CHAOS)
-			);
-			Element.updateCell(x, y);
+			));
 		}
 	}
 }
 
 function explode(ox, oy, r = 10, vel = 0.2, passthrough = EXPLOSION_PASSTHROUGH) {
 	const c = Math.PI * 2 * r;
+
+	const dyn = scene.main.getElementsWithScript(DYNAMIC_OBJECT);
+	for (let i = 0; i < dyn.length; i++)
+		dyn[i].scripts.DYNAMIC_OBJECT.explode(ox, oy, r, vel);
 
 	for (let i = 0; i < c; i++) {
 		const angle = i / c * Math.PI * 2;
@@ -1362,27 +2134,44 @@ const DATA = {
 
 	[TYPES.CORAL]: new Element(1, Color.ORANGE, .2, .1, (x, y) => {
 		Element.affectNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 200;
+			if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 100;
 			if (Element.isType(ox, oy, TYPES.CORAL) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = grid[ox][oy].acts--;
 		})
-		if (grid[x][y].acts == 0) Element.setCell(x, y, TYPES.DEAD_CORAL);
+		if (grid[x][y].acts <= 0) Element.setCell(x, y, TYPES.DEAD_CORAL);
 		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.CORAL)) Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL);
-		grid[x][y].acts--;
+		grid[x][y].acts-=2;
 
 		Element.updateCell(x, y)
 	}),
 
 	[TYPES.DEAD_CORAL]: new Element(1, Color.GRAY, .2, .1),
 
-	[TYPES.CORAL_BRANCH]: new Element(1, Color.RAZZMATAZZ, .2, .1),
-
-	[TYPES.CORAL_HUB]: new Element(1, Color.MAGENTA, .2, .1, (x, y) => {
-
+	[TYPES.CORAL_STIMULANT]: new Element(1, Color.LIME, .2, .1, (x, y) => {
+		Element.affectNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.DEAD_CORAL) && (ox == x || oy == y)) Element.setCell(ox, oy, TYPES.CORAL)
+		})
+		solidUpdate(x, y, undefined, undefined, (x, y, fx, fy) => {
+			if (Element.tryMove(x, y, fx, fy))
+				synth.play({
+					duration: 10,
+					fadeOut: 20,
+					frequency: Random.range(500, 700),
+					volume: 0.5,
+					wave: "square"
+				});
+		});
 	}),
 
-	[TYPES.CORAL_STIMULANT]: new Element(1, Color.LIME, .2, .1, (x, y) => {
-		Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL)
-		solidUpdate(x, y)
+	[TYPES.CORAL_PRODUCER]: new Element(1, Color.RAZZMATAZZ, .2, .1, (x, y) => {
+		Element.affectNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.DEAD_CORAL)) Element.trySetCell(x, y + 1, TYPES.CORAL_STIMULANT);
+		})
+	}),
+
+	[TYPES.CORAL_CONSUMER]: new Element(1, Color.MAGENTA, .2, .1, (x, y) => {
+		Element.affectNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.CORAL) && Element.isType(x, y - 1, TYPES.CORAL_STIMULANT)) Element.setCell(x, y - 1, TYPES.AIR);
+		})
 	}),
 
 	[TYPES.ASH]: new Element(1, freqColoring([
@@ -1663,24 +2452,7 @@ const DATA = {
 		["#785d42", 45],
 		["#8c6e4f", 45],
 		["#ab836f", 1]
-	]), 0.2, 0, (x, y) => {
-		solidUpdate(x, y);
-	}),
-
-	[TYPES.SUNFLOWER_SEED]: new Element(1, freqColoring([
-		["#4d483f", 9],
-		["#383632", 8],
-		["#6b6452", 5],
-		["#a39c8c", 2]
-	]), 0.04, 0.06, (x, y) => {
-		solidUpdate(x, y);
-		if (Element.isType(x, y + 1, TYPES.DAMP_SOIL) && grid[x][y + 1].acts == 0) {
-			Element.die(x, y);
-			grid[x][y + 1].acts = 5;
-		}
-	}, (x, y) => {
-		Element.trySetCell(x, y - 1, Random.bool(.4) ? TYPES.ASH : TYPES.SMOKE);
-	}),
+	]), 0.2, 0, solidUpdate),
 
 	[TYPES.SALT]: new Element(1, freqColoring([
 		["#ded7d5", 45],
@@ -1915,7 +2687,7 @@ const DATA = {
 		const color2 = DATA[TYPES.SNOW].getColor(x, y);
 		return Color.lerp(color1, color2, 0.5);
 	}, 0.5, 0.2, (x, y) => {
-		solidUpdate(x, y, GRAVITY, 0, Element.tryMoveReference);
+		solidUpdate(x, y, GRAVITY, 0);
 	}, (x, y) => {
 		Element.setCell(x, y, grid[x][y].reference);
 		return true;
@@ -2083,9 +2855,17 @@ const DATA = {
 		// return Color.lerp(new Color("#a8f0bb01"), new Color("#d1f0d900"), p)
 
 	}, 0.1, 0.3, (x, y) => {
-		if ((Random.bool(Random.perlin2D(x, y, .03)))) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
-		else if (Random.bool(.01)) Element.react(x, y, TYPES.AIR, TYPES.BAHHUM);
-		else if (Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y + 1, TYPES.AIR) || Element.isType(x - 1, y, TYPES.AIR) || Element.isType(x + 1, y, TYPES.AIR)) Element.updateCell(x, y);
+		if ((Random.bool(Math.max(Random.perlin2D(x, y, .03), 0.01)))) {
+			if (Element.react(x, y, TYPES.AIR, TYPES.BAHHUM)) {
+				if (Random.bool(0.005)) synth.play({
+					duration: 10,
+					frequency: Random.range(300, 500),
+					volume: 1,
+					wave: "sine",
+					fadeOut: 10
+				});
+			}
+		} else if (Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y + 1, TYPES.AIR) || Element.isType(x - 1, y, TYPES.AIR) || Element.isType(x + 1, y, TYPES.AIR)) Element.updateCell(x, y);
 
 		Element.consumeReact(x, y, TYPES.DDT, TYPES.LIGHTNING)
 	}),
@@ -2153,6 +2933,138 @@ const DATA = {
 		}
 	}, (x, y) => {
 		Element.trySetCell(x, y - 1, Random.bool(.7) ? (Random.bool(.2) ? TYPES.ASH : TYPES.SMOKE) : TYPES.STEAM);
+	}),
+
+	[TYPES.THICKET_SEED]: new Element(1, freqColoring([
+		["#423322", 9],
+		["#291f14", 8],
+		["#362a1d", 4],
+		["#69543e", 4],
+		["#594936", 3],
+	]), 0.04, 0.06, (x, y) => {
+		solidUpdate(x, y);
+
+		if (Element.isType(x, y + 1, TYPES.DAMP_SOIL) && grid[x][y + 1].acts == 0) {
+			Element.setCell(x, y, TYPES.THICKET_STEM);
+			let h = Random.int(38, 50);
+			grid[x][y].acts = h;
+		}
+	}, (x, y) => {
+		Element.trySetCell(x, y - 1, Random.bool(.4) ? TYPES.ASH : TYPES.SMOKE);
+	}),
+
+	[TYPES.THICKET_STEM]: new Element(1, freqColoring([
+		["#614a57", 3],
+		["#4d593d", 7],
+		["#4a523a", 10],
+		["#434d36", 7],
+
+	]), .15, .03, (x, y) => {
+		Element.trySetCell(x, y + 1, TYPES.ROOT, SOIL_TYPES);
+
+		if (grid[x][y].acts > 1 && (Element.isType(x, y - 1, TYPES.AIR) || Element.isType(x, y - 1, TYPES.THICKET) || (Element.isType(x, y - 1, TYPES.THICKET_STEM) && grid[x][y-1].acts == -1))) {
+			if (Random.bool(.07)) {
+				Element.setCell(x, y - 1, TYPES.THICKET_STEM);
+				grid[x][y - 1].acts = grid[x][y].acts - 1;
+			} else Element.updateCell(x, y)
+		}
+
+		if(Random.bool(.0008) && grid[x][y].acts > 1){
+			let h = grid[x][y].acts;
+			grid[x][y].acts = -1;
+			if (Element.inBounds(x, y + 1))
+				grid[x][y+1].acts = -1;
+			let d = Random.bool() ? -1 : 1;
+			let a = Random.range(-Math.PI/5, Math.PI/5)
+			let ox = Math.ceil(Math.cos(a)*d*(h/3) + Random.range(-4, 10)) + x;
+			let oy = Math.ceil(Math.sin(a)*(h/3) + Random.range(-3, 3)) + y;
+			weedBranch(x + d, y, ox, oy, TYPES.THICKET_STEM);
+			for(let i = -3*Math.PI/4; i < 3*Math.PI/4; i += Math.PI/4){
+				let len = 6 / Math.sqrt(Math.abs(i)+1)
+				let oox = Math.ceil(Math.cos(a+i)*d*len) + ox;
+				let ooy = Math.ceil(Math.sin(a+i)*len) + oy;
+				weedBranch(ox, oy, oox, ooy, TYPES.THICKET)
+			}	
+		}
+
+		if(grid[x][y].acts == 1){
+			weedBranch(x, y - 1, x, y - 6, TYPES.THICKET_BUD);
+			weedBranch(x + (Random.bool() ? 1 : -1), y - 1, x + (Random.bool() ? 1 : -1), y - 5, TYPES.THICKET_BUD);
+			weedBranch(x + (Random.bool() ? 1 : -1), y - 1, x + (Random.bool() ? 1 : -1), y - 5, TYPES.THICKET_BUD);
+			let ox = Math.ceil(Math.cos(3*Math.PI/2 + Math.PI/5)*5) + x;
+			let oy = Math.ceil(Math.sin(3*Math.PI/2 + Math.PI/5)*5) + y;
+			weedBranch(x, y, ox, oy, TYPES.THICKET)
+			ox = Math.ceil(Math.cos(3*Math.PI/2 - Math.PI/5)*5) + x;
+			oy = Math.ceil(Math.sin(3*Math.PI/2 - Math.PI/5)*5) + y;
+			weedBranch(x-1, y, ox, oy, TYPES.THICKET)
+			grid[x][y].acts--;
+		}
+		
+	}, (x, y) => {
+		Element.trySetCell(x, y - 1, Random.bool(.4) ? (Random.bool(.2) ? TYPES.ASH : TYPES.SMOKE) : TYPES.STEAM);
+	}),
+
+	[TYPES.THICKET_BUD]: new Element(1, freqColoring([
+		["#804e77", 2], 
+		["#753f6c", 4], 
+		["#7a4d73", 4], 
+		["#6b3e64", 2], 
+		["#7d5c78", 1]
+	]), .15, .03, (x,y) => {
+		if(grid[x][y].acts == 0) Element.consumeReact(x, y, TYPES.AIR, TYPES.INCENSE, .01);
+	}, (x, y) => {
+		Element.trySetCell(x, y - 1, Random.bool(.4) ? (Random.bool(.2) ? TYPES.ASH : TYPES.INCENSE_SMOKE) : TYPES.STEAM);
+	}),
+
+	[TYPES.THICKET]: new Element(1, freqColoring([
+		["#427a35", 2],
+		["#3f7a31", 1],
+		["#4a7536", 2],
+		["#4a8a3b", 3],
+		["#539644", 1]
+	]), .15, .03, (x, y)=> null, (x, y) => {
+		Element.trySetCell(x, y - 1, Random.bool(.4) ? (Random.bool(.2) ? TYPES.ASH : TYPES.SMOKE) : TYPES.STEAM);
+	}),
+
+	[TYPES.INCENSE]: new Element(1, (x, y) => {
+		return Random.choice(freqColoring([
+			["#57593c01", 2],
+			["#5d614001", 3],
+			["#73754901", 1],
+
+			["#44613b01", 1],
+			["#37472901", 2],
+			["#354a2f01", 2],
+			["#364d2e01", 3],
+		]))
+	}, .15, .05, (x, y) => {
+		solidUpdate(x, y)
+	}, (x, y) => {
+		Element.trySetCell(x, y - 1, Random.bool(.1) ? TYPES.ASH : TYPES.INCENSE_SMOKE);
+	}),
+
+	[TYPES.INCENSE_SMOKE]: new Element(.6, (x, y) => {
+		let p = Random.perlin2D(x, y, .05);
+		if(p > .5 && p < .6) return new Color("#0d1e0e01");
+		else return new Color("#091c0b01");
+	}, 0, 0, (x, y) => {
+		gasUpdate(x, y)
+	}),
+
+
+	[TYPES.SUNFLOWER_SEED]: new Element(1, freqColoring([
+		["#4d483f", 9],
+		["#383632", 8],
+		["#6b6452", 5],
+		["#a39c8c", 2]
+	]), 0.04, 0.06, (x, y) => {
+		solidUpdate(x, y);
+		if (Element.isType(x, y + 1, TYPES.DAMP_SOIL) && grid[x][y + 1].acts == 0) {
+			Element.die(x, y);
+			grid[x][y + 1].acts = 5;
+		}
+	}, (x, y) => {
+		Element.trySetCell(x, y - 1, Random.bool(.4) ? TYPES.ASH : TYPES.SMOKE);
 	}),
 
 	[TYPES.SUNFLOWER_PETAL]: new Element(1, [new Color("#f5c440"), new Color("#e3c04f"), new Color("#ebd234")], .05, .03, (x, y) => null, (x, y) => {
@@ -2303,7 +3215,7 @@ const DATA = {
 		return true;
 	}),
 	[TYPES.POWER_LAVA]: new Element(100, [Color.CYAN, Color.BLUE, Color.SKY_BLUE], 0.7, 0, (x, y) => {
-		fluidUpdate(x, y, 1, GRAVITY, SOLID_PASS_THROUGH);
+		liquidUpdate(x, y);
 
 		Element.react(x, y - Math.floor((Math.random() * 6)), TYPES.AIR, TYPES.BLUE_FIRE, 0.007);
 		Element.reactMany(x, y, WATER_TYPES, TYPES.SMOKE, 0.005);
@@ -2443,7 +3355,20 @@ const DATA = {
 		if (Random.bool(.7)) Element.trySetCell(x, y - 1, Random.bool(.05) ? TYPES.ASH : TYPES.SMOKE);
 		Element.trySetCell(x, y - 1, Random.bool(.3) ? TYPES.MOLTEN_WAX : TYPES.HONEY);
 	}),
-	[TYPES.BEE]: new Element(2, [new Color("#e8d207"), new Color("#ffe812"), new Color("#f5e764"), new Color("#e6d42c"), new Color("#d1a81f"), new Color("#bd940d")], 0.1, 0.05, (x, y) => beeUpdate(x, y, LIQUID_PASS_THROUGH), (x, y) => {
+	[TYPES.BEE]: new Element(2, [
+		new Color("#e8d207"), new Color("#ffe812"),
+		new Color("#f5e764"), new Color("#e6d42c"),
+		new Color("#d1a81f"), new Color("#bd940d")
+	], 0.1, 0.05, (x, y) => chaosUpdate(x, y, LIQUID_PASS_THROUGH), (x, y) => {
+		makeCircle(x, y - 1, TYPES.HONEY, 2);
+		explode(x, y - 1, 2);
+	}),
+
+	[TYPES.DAMSELFLY]: new Element(2, [
+		new Color("#34eb95"), new Color("#1ac45e"),
+		new Color("#1fb3d1"), new Color("#28d1c6"),
+		new Color("#2ee885"), new Color("#24c4e0")
+	], 0.1, 0.05, (x, y) => boidUpdate(x, y, 2, 0.2, LIQUID_PASS_THROUGH), (x, y) => {
 		makeCircle(x, y - 1, TYPES.HONEY, 2);
 		explode(x, y - 1, 2);
 	}),
@@ -2481,18 +3406,22 @@ const DATA = {
 	[TYPES.ACID]: new Element(30, [Color.LIME, new Color("#2dfc2d")], 0.1, 0, (x, y) => {
 		const cell = grid[x][y];
 		Element.affectNeighbors(x, y, (x, y) => {
-			if (!Element.isType(x, y, TYPES.ACID) && !Element.isType(x, y, TYPES.GLASS) && Random.bool(0.5)) { //changed this although you had two copies of the istype glass checker
-				if (Element.isType(x, y, TYPES.CONDENSED_STONE)) {
-					if (Random.bool(.0004)) {
-						Element.setCell(x, y, TYPES.AIR);
-						cell.acts++;
-					}
-					else Element.updateCell(x, y)
-				}
-				else {
+			if (!Element.isTypes(x, y, ACID_IMMUNE) && Random.bool(0.5)) {
+				const isStone = Element.isType(x, y, TYPES.CONDENSED_STONE);
+				const bool = Random.bool(.0004);
+				if (!isStone || (isStone && bool)) {
 					Element.setCell(x, y, TYPES.AIR);
+					if (Random.bool(0.05)) synth.play({
+						duration: 10,
+						frequency: Random.range(200, 300),
+						fadeOut: 1000,
+						wave: "sine",
+						volume: 1
+					})
 					cell.acts++;
 				}
+				if (isStone && !bool)
+					Element.updateCell(x, y);
 			}
 		});
 
@@ -2507,6 +3436,14 @@ const DATA = {
 		const cell = grid[x][y];
 
 		if (cell.acts === 0) {
+			if (Random.bool(0.01))
+				synth.play({
+					frequency: 35,
+					volume: 0.02,
+					duration: 150,
+					fadeOut: 40,
+					wave: "square"
+				});
 
 			let canConduct = false;
 			Element.affectNeighbors(x, y, (x, y) => {
@@ -2557,7 +3494,6 @@ const DATA = {
 		} else {
 			if (cell.acts++ > 10) {
 				Element.dereference(x, y);
-				grid[x][y].acts = 0;
 			}
 		}
 
@@ -2874,16 +3810,23 @@ const DATA = {
 	}),
 
 	[TYPES.LIGHT]: new Element(255, new Color(255, 200, 100), 0.9, 0.001, (x, y) => {
+	
 	}, (x, y) => {
 		Element.die(x, y);
 		makeCircle(x, y, TYPES.LIGHTNING, 10);
 		return true;
 	}),
 
-
 };
 
-const ELEMENT_COUNT = Object.keys(TYPES).length;
+const STATIC_SOLID = new Set([...SOLID]
+	.filter(id => {
+		const { update } = DATA[id];
+		if (update === solidUpdate) return false;
+		if (update.toString().indexOf("solidUpdate") > -1) return false;
+		return true;
+	})
+);
 
 function typeName(type) {
 	if (type === TYPES.ELECTRICITY) return "Electricity";
@@ -2957,6 +3900,9 @@ class SETTINGS extends ElementScript {
 	init(obj, type) {
 		obj.scripts.removeDefault();
 		this.type = type;
+		this.totalControls = Object.entries(controls).length;
+		this.rowHeight = obj.height / this.totalControls;
+		this.font = new Font(this.rowHeight * 0.7, "Arial");
 	}
 	click(obj) {
 	}
@@ -2964,12 +3910,22 @@ class SETTINGS extends ElementScript {
 		obj.hidden = !SETTINGS_SHOWN;
 	}
 	draw(obj, name, shape) {
-		renderer.draw(Color.WHITE).rect(width * .125, height * .125, width * .75, height * .75);
+		renderer.draw(Color.WHITE).rect(shape);
+		const borderColor = Color.GRAY;
+		const entries = Object.entries(controls);
+		for (let i = 0; i < this.totalControls; i++) {
+			const y = shape.y + i * this.rowHeight;
+			renderer.stroke(borderColor).rect(-shape.width / 2, y, shape.width, this.rowHeight);
+			renderer.textMode = TextMode.CENTER_CENTER;
+			renderer.draw(Color.BLACK).text(this.font, entries[i][0], -shape.width / 4, y + this.rowHeight / 2);
+			renderer.textMode = TextMode.CENTER_CENTER;
+			renderer.draw(Color.BLACK).text(this.font, entries[i][1], shape.width / 4, y + this.rowHeight / 2);
+		}
+		renderer.stroke(borderColor).line(0, -shape.height / 2, 0, shape.height / 2);
+
 	}
-	static create(type) {
-		const panel = scene.main.addUIElement("panel", 0, 0, 0, 0);
-		//const exit = scene.main.addUIElement("button", x + this.SIZE / 2, y + this.SIZE / 2, this.SIZE, this.SIZE);
-		//exit.scripts.add(SETTINGS)
+	static create() {
+		const panel = scene.main.addUIElement("panel", width / 2, height / 2, width * 0.75, height * 0.75);
 		panel.scripts.add(SETTINGS);
 		return panel;
 	}
@@ -3057,8 +4013,6 @@ float octavePerlin(vec2 seed) {
 }
 `;
 
-const DISTORTED = [TYPES.LAVA, TYPES.POWER_LAVA, ...LIQUID];
-
 const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
 	const godRays = new GPUShader(image.width / PIXEL_SIZE, image.height / PIXEL_SIZE, `
 		uniform int lightDistance;
@@ -3099,7 +4053,7 @@ const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
 
 			// distortion
 			int id = getId(p);
-			if (${DISTORTED.map(id => `id == ${id}`).join(" || ")}) {
+			if (${[...LIQUID].map(id => `id == ${id}`).join(" || ")}) {
 				float noise = perlin(p * 0.1) * 0.3;
 				const float speed = 1.0;
 				p.x += 2.0 * sin(time * 0.03 * speed + p.y * 0.1 + noise);
@@ -3302,11 +4256,12 @@ function text(font, text, x, y) {
 
 const PAN_SENSITIVITY = 20;
 const ZOOM_SENSITIVITY = 0.1
-let SELECTORS_SHOWN = false;
+let SELECTORS_SHOWN = true;
 let SETTINGS_SHOWN = false;
 
-const BRUSH_TYPES = ["Circle", "Square", "Ring", "Forceful", "Row", "Column", "EraseOnly"]
+const BRUSH_TYPES = ["Circle", "Square", "Ring", "Forceful", "Row", "Column"]
 let brushType = 0;
+let eraseOnly = false;
 
 let currentDebugColor = Color.RED;
 let debugColor1 = Color.RED;
@@ -3317,252 +4272,449 @@ let debugOscillating = false;
 let lightSources = [];
 
 const backgroundTex = new Texture(WIDTH, HEIGHT);
-backgroundTex.shader((x, y, dest) => dest.set(DATA[TYPES.TILE_BASE].getColor(x, y).times(0.3).opaque));
+backgroundTex.shader((x, y, dest) => {
+	const factor = 1.2;
+	const fx = Number.clamp(~~(x / factor), 0, WIDTH - 1);
+	const fy = Number.clamp(~~(y / factor), 0, HEIGHT - 1);
+	dest.set(
+		DATA[TYPES.TILE_BASE]
+			.getColor(fx, fy)
+			.times(0.1)
+			.opaque
+	);
+});
 
-intervals.continuous(time => {
-	try {
-		let hoveredElementType = TYPES.AIR;
-		let hoveredElementActs = 0;
-		{
-			const coord = Vector2.floor(mouse.world.over(CELL));
-			if (Element.inBounds(coord.x, coord.y)) {
-				hoveredElementType = grid[coord.x][coord.y].id;
-				hoveredElementActs = grid[coord.x][coord.y].acts;
-			}
-		};
+function handleBrushInput() {
+	if (keyboard.pressed("Control")) return;
 
-		if (keyboard.justPressed("d")) { // download
-			fileSystem.writeFile(SAVE_FILE_PATH, new WorldSave(grid));
-			if (keyboard.pressed("Shift")) fileSystem.downloadFile(SAVE_FILE_PATH);
+	for (const touch of touches.allPressed) {
+		const r = brushSize;
+		const { world } = touches.get(touch);
+
+		const hovered = scene.main.getElementsWithScript(TYPE_SELECTOR).some(el => !el.hidden && el.collidePoint(world));
+
+		if (hovered) {
+			anyHovered = true;
+			continue;
 		}
 
-		if (keyboard.justPressed("u")) { // upload
-			const replace = () => {
-				const { grid: uploadedGrid } = fileSystem.readFile(SAVE_FILE_PATH);
-				const w = Math.min(WIDTH, uploadedGrid.length);
-				const h = Math.min(HEIGHT, uploadedGrid[0].length);
-				for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) {
-					grid[i][j] = uploadedGrid[i][j];
-					Element.updateCell(i, j);
+		const { x: ox, y: oy } = Vector2.floor(world.over(CELL));
+		const { x: oxl, y: oyl } = Vector2.floor(mouse.worldLast.over(CELL));
+
+		if (brush === TYPES.PARTICLE)
+			explode(ox, oy, r);
+		else if (brush === TYPES.ENDOTHERMIA)
+			explode(ox, oy, r);
+		else {
+			const handleCell = (x, y) => {
+				if (Element.inBounds(x, y)) {
+					if (brush === TYPES.EXOTHERMIA)
+						Element.tryBurn(x, y, TYPES.FIRE);
+					else if (brush !== TYPES.AIR && eraseOnly) {
+						const { id } = grid[x][y];
+						if (
+							id === brush ||
+							(DATA[id].reference && grid[x][y].reference === brush)
+						) Element.setCell(x, y, TYPES.AIR);
+					} else if (brush === TYPES.AIR || Element.isEmpty(x, y))
+						Element.setCell(x, y, brush);
 				}
 			};
-			if (keyboard.pressed("Shift"))
-				fileSystem.uploadFile(SAVE_FILE_PATH).then(replace);
-			else replace();
-		}
-
-		if (!SETTINGS_SHOWN) {
-			for (const key of keyboard.downQueue) {
-				if (keyboard.released("Shift")) {
-					if (key === "ArrowRight" || key === ".") {
-						if (brushType + 1 < BRUSH_TYPES.length) brushType++;
-						else brushType = 0;
+			if (brushType == 0) { // Circle
+				for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+					if (i * i + j * j < r * r) {
+						const x = i + ox;
+						const y = j + oy;
+						handleCell(x, y);
 					}
-					else if (key === "ArrowLeft" || key === ",") {
-						if (brushType > 0) brushType--;
-						else brushType = BRUSH_TYPES.length - 1;
-					}
-					else if (key === "ArrowUp") brushSize++;
-					else if (key === "ArrowDown") brushSize = Math.max(brushSize - 1, 1);
-					else if (key === "e") {
-						scene.camera.restoreZoom();
-						scene.camera.position = middle;
-					}
-					else if (key === "r") {
-						for (let x = 0; x < WIDTH; x++)
-							for (let y = 0; y < HEIGHT; y++)
-								Element.setCell(x, y, TYPES.AIR);
-					}
-					else if (key == "0") brushType = 0;
-					else if (key == "1") brushType = 1;
-					else if (key == "2") brushType = 2;
-					else if (key == "3") brushType = 3;
-					else if (key == "4") brushType = 4;
-					else if (key == "5") brushType = 5;
-					else if (key == "6") brushType = 5;
-				} else {
-					if (key === "+") scene.camera.zoomIn(ZOOM_SENSITIVITY);
-					else if (key === "_") scene.camera.zoomOut(ZOOM_SENSITIVITY);
-					else if (key === "ArrowUp") scene.camera.position.add(new Vector2(0, -PAN_SENSITIVITY));
-					else if (key === "ArrowDown") scene.camera.position.add(new Vector2(0, PAN_SENSITIVITY))
-					else if (key === "ArrowRight") scene.camera.position.add(new Vector2(PAN_SENSITIVITY, 0));
-					else if (key === "ArrowLeft") scene.camera.position.add(new Vector2(-PAN_SENSITIVITY, 0));
 				}
 			}
-
-			if (keyboard.justPressed(" ")) paused = !paused;
-			if (keyboard.justPressed("s")) SELECTORS_SHOWN = !SELECTORS_SHOWN;
-
-			if (keyboard.pressed("Control")) {
-				if (mouse.pressed("Left"))
-					scene.camera.position.add(mouse.worldLast.minus(mouse.world));
-				if (mouse.wheelDelta > 0)
-					scene.camera.zoomOut(ZOOM_SENSITIVITY);
-				else if (mouse.wheelDelta < 0)
-					scene.camera.zoomIn(ZOOM_SENSITIVITY);
-			} else {
-				if (mouse.wheelDelta > 0) brushSize = Math.max(brushSize - 1, 1);
-				if (mouse.wheelDelta < 0) brushSize++;
-
-
-				for (const touch of touches.allPressed) {
-					const r = brushSize;
-					const { world } = touches.get(touch);
-
-					const hovered = scene.main.getElementsWithScript(TYPE_SELECTOR).some(el => !el.hidden && el.collidePoint(world));
-
-					if (hovered) {
-						anyHovered = true;
-						continue;
+			else if (brushType == 1) { // Square
+				let or = r - 1;
+				for (let i = -or; i <= or; i++) for (let j = -or; j <= or; j++) {
+					const x = i + ox;
+					const y = j + oy;
+					handleCell(x, y);
+				}
+			}
+			else if (brushType == 2) { // Ring
+				for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+					if (i * i + j * j < r * r && i * i + j * j >= (r - 1) * (r - 1)) {
+						const x = i + ox;
+						const y = j + oy;
+						handleCell(x, y);
 					}
+				}
+			}
+			else if (brushType == 3) { // Forceful
+				const CHAOS = 1;
+				const vel = 0.3;
+				for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+					if (i * i + j * j < r * r) {
+						const x = i + ox;
+						const y = j + oy;
+						handleCell(x, y);
+						if (Element.inBounds(x, y)) createParticle(
+							new Vector2(x, y),
+							new Vector2(
+								vel * i + Random.range(-CHAOS, CHAOS),
+								vel * j + Random.range(-CHAOS, CHAOS)
+							)
+						);
+					}
+				}
+			}
+			else if (brushType == 4) { // Row
+				let disp = oy-oyl;
+				for (let i = 0; i <= WIDTH; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
+					const x = i;
+					const y = j + oy;
+					handleCell(x, y);
+				}
+			}
+			else if (brushType == 5) { // Columm
+				let disp = ox-oxl;
+				for (let i = 0; i <= HEIGHT; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
+					const x = j + ox;
+					const y = i;
+					handleCell(x, y);
+				}
+			}
+			else if (brushType == 6) { // EraseOnly
+				if (brush !== TYPES.EXOTHERMIA && brush !== TYPES.AIR) for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+					if (i * i + j * j < r * r) {
+						const x = i + ox;
+						const y = j + oy;
+						if (Element.inBounds(x, y)) {
+							const { id } = grid[x][y];
+							if (
+								id === brush ||
+								(DATA[id].reference && grid[x][y].reference === brush)
+							) Element.setCell(x, y, TYPES.AIR);
+						}
+					}
+				}
+			}
+		}
+	}
+}
 
-					const { x: ox, y: oy } = Vector2.floor(world.over(CELL));
-					const { x: oxl, y: oyl } = Vector2.floor(mouse.worldLast.over(CELL));
+function handleInput() {
+	
+	function clearAll() {
+		for (let x = 0; x < WIDTH; x++)
+		for (let y = 0; y < HEIGHT; y++)
+			Element.setCell(x, y, TYPES.AIR);
+		scene.main.removeElements(scene.main.getElementsWithScript(DYNAMIC_OBJECT));
+		for (let i = 0; i < particles.length; i++)
+			particles[i].remove();
+		particles = [];	
+		for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++)
+			chunks[i][j].sceneObject.scripts.CHUNK_COLLIDER.remesh();
+	}
 
-					if (brush === TYPES.PARTICLE)
-						explode(ox, oy, r);
-					else if (brush === TYPES.ENDOTHERMIA)
-						explode(ox, oy, r);
-					else {
-						const handleCell = (x, y) => {
-							if (Element.inBounds(x, y)) {
-								if (brush === TYPES.EXOTHERMIA)
-									Element.tryBurn(x, y, TYPES.FIRE);
-								else if (brush === TYPES.AIR || Element.isEmpty(x, y))
-									Element.setCell(x, y, brush);
+	if (keyboard.justPressed("d")) { // download
+		fileSystem.writeFile(SAVE_FILE_PATH, new WorldSave(grid, WorldSave.getRigidbodies()));
+		if (keyboard.pressed("Shift")) fileSystem.downloadFile(SAVE_FILE_PATH);
+	}
+
+	if (keyboard.justPressed("u")) { // upload
+		const replace = () => {
+			clearAll();
+			const { grid: uploadedGrid, rigidbodies } = fileSystem.readFile(SAVE_FILE_PATH);
+			const w = Math.min(WIDTH, uploadedGrid.length);
+			const h = Math.min(HEIGHT, uploadedGrid[0].length);
+			for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) {
+				grid[i][j] = uploadedGrid[i][j];
+				Element.updateCell(i, j);
+			}
+			WorldSave.instantiateRigidbodies(rigidbodies);
+		};
+		if (keyboard.pressed("Shift"))
+			fileSystem.uploadFile(SAVE_FILE_PATH).then(replace);
+		else replace();
+	}
+
+	if (!SETTINGS_SHOWN) {
+		for (const key of keyboard.downQueue) {
+			if (keyboard.released("Shift")) {
+				if (key === "ArrowRight" || key === ".") {
+					if (brushType + 1 < BRUSH_TYPES.length) brushType++;
+					else brushType = 0;
+				} else if (key === "ArrowLeft" || key === ",") {
+					if (brushType > 0) brushType--;
+					else brushType = BRUSH_TYPES.length - 1;
+				} else if (key === "ArrowUp") brushSize++;
+				else if (key === "ArrowDown") brushSize = Math.max(brushSize - 1, 1);
+				else if (key === "e") {
+					scene.camera.restoreZoom();
+					scene.camera.position = middle;
+				} else if (key === "p") {
+					eraseOnly = !eraseOnly;
+				} else if (key === "r") {
+					clearAll();		
+				} else if (key === "a") {
+					const { x: mx, y: my } = Vector2.floor(mouse.world.over(CELL));
+					if (Element.inBounds(mx, my) && STATIC_SOLID.has(grid[mx][my].id)) {
+						const id = grid[mx][my].id;
+						let toVisit = [new Vector2(mx, my)];
+						const key = (x, y) => x + "|" + y;
+						const points = [];
+						const visited = new Set([key(mx, my)]);
+						let nextToVisit = [];
+						const tryVisit = (x, y) => {
+							if (!Element.inBounds(x, y) || grid[x][y].id !== id)
+								return;
+							const k = key(x, y);
+							if (!visited.has(k)) {
+								visited.add(k);
+								nextToVisit.push(new Vector2(x, y));
 							}
 						};
-						if (brushType == 0) { // Circle
-							for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-								if (i * i + j * j < r * r) {
-									const x = i + ox;
-									const y = j + oy;
-									handleCell(x, y);
-								}
+						while (toVisit.length) {
+							points.push(...toVisit);
+							nextToVisit = [];
+							for (let i = 0; i < toVisit.length; i++) {
+								const { x, y } = toVisit[i];
+								tryVisit(x - 1, y);
+								tryVisit(x, y - 1);
+								tryVisit(x + 1, y);
+								tryVisit(x, y + 1);
+							}
+							toVisit = nextToVisit;
+						}
+						const bounds = Rect.bound(points);
+						const { x, y, width, height } = bounds;
+						const objGrid = Array.dim(width + 1, height + 1)
+							.map(() => new Cell(TYPES.AIR));
+						for (let i = 0; i <= width; i++) for (let j = 0; j <= height; j++) {
+							if (visited.has(key(i + x, j + y))) {
+								grid[i + x][j + y].get(objGrid[i][j]);
+								Element.die(i + x, j + y);
 							}
 						}
-						else if (brushType == 1) { // Square
-							let or = r - 1;
-							for (let i = -or; i <= or; i++) for (let j = -or; j <= or; j++) {
-								const x = i + ox;
-								const y = j + oy;
-								handleCell(x, y);
-							}
+						const minBounds = new Vector2(0, 0);
+						const maxBounds = new Vector2(CHUNK_WIDTH - 1, CHUNK_HEIGHT - 1);
+						const minChunk = Vector2.clamp(Vector2.floor(bounds.min.over(CHUNK)), minBounds, maxBounds);
+						const maxChunk = Vector2.clamp(Vector2.ceil(bounds.max.over(CHUNK)), minBounds, maxBounds);
+						for (let i = minChunk.x; i <= maxChunk.x; i++)
+						for (let j = minChunk.y; j <= maxChunk.y; j++) {
+							chunks[i][j].sceneObject.scripts.CHUNK_COLLIDER.remesh();
 						}
-						else if (brushType == 2) { // Ring
-							for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-								if (i * i + j * j < r * r && i * i + j * j >= (r - 1) * (r - 1)) {
-									const x = i + ox;
-									const y = j + oy;
-									handleCell(x, y);
-								}
-							}
-						}
-						else if (brushType == 3) { // Forceful
-							for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-								if (i * i + j * j < r * r) {
-									const x = i + ox;
-									const y = j + oy;
-									handleCell(x, y);
-									explode(x, y, 1);
-								}
-							}
-						}
-						else if (brushType == 4) { // Row
-							let disp = oy-oyl;
-							for (let i = 0; i <= WIDTH; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
-								const x = i;
-								const y = j + oy;
-								handleCell(x, y);
-							}
-						}
-						else if (brushType == 5) { // Columm
-							let disp = ox-oxl;
-							for (let i = 0; i <= HEIGHT; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
-								const x = j + ox;
-								const y = i;
-								handleCell(x, y);
-							}
-						}
-						else if (brushType == 6) { // EraseOnly
-							if (brush !== TYPES.EXOTHERMIA && brush !== TYPES.AIR) for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-								if (i * i + j * j < r * r) {
-									const x = i + ox;
-									const y = j + oy;
-									if (Element.inBounds(x, y)) {
-										const { id } = grid[x][y];
-										if (
-											id === brush ||
-											(DATA[id].reference && grid[x][y].reference === brush)
-										) Element.setCell(x, y, TYPES.AIR);
-									}
-								}
-							}
-						}
+						const obj = scene.main.addPhysicsElement("obj", 0, 0, true, new Controls("i", "k", "j", "l"));
+						obj.scripts.add(DYNAMIC_OBJECT, objGrid, new Vector2(x, y));
+						if (keyboard.pressed("l")) obj.scripts.add(PLAYER_MOVEMENT);
 					}
-				}
+				} else if (key == "0") brushType = 0;
+				else if (key == "1") brushType = 1;
+				else if (key == "2") brushType = 2;
+				else if (key == "3") brushType = 3;
+				else if (key == "4") brushType = 4;
+				else if (key == "5") brushType = 5;
+				else if (key == "6") brushType = 5;
+			} else {
+				if (key === "+") scene.camera.zoomIn(ZOOM_SENSITIVITY);
+				else if (key === "_") scene.camera.zoomOut(ZOOM_SENSITIVITY);
+				else if (key === "ArrowUp") scene.camera.position.add(new Vector2(0, -PAN_SENSITIVITY));
+				else if (key === "ArrowDown") scene.camera.position.add(new Vector2(0, PAN_SENSITIVITY))
+				else if (key === "ArrowRight") scene.camera.position.add(new Vector2(PAN_SENSITIVITY, 0));
+				else if (key === "ArrowLeft") scene.camera.position.add(new Vector2(-PAN_SENSITIVITY, 0));
 			}
 		}
 
-		if (keyboard.justPressed("Escape")) {
-			SETTINGS_SHOWN = !SETTINGS_SHOWN;
-			paused = SETTINGS_SHOWN;
+		if (keyboard.justPressed(" ")) paused = !paused;
+		if (keyboard.justPressed("g")) RTX = !RTX;
+		if (keyboard.justPressed("s")) SELECTORS_SHOWN = !SELECTORS_SHOWN;
+
+		if (keyboard.pressed("Control")) {
+			if (mouse.pressed("Left"))
+				scene.camera.position.add(mouse.worldLast.minus(mouse.world));
+			if (mouse.wheelDelta > 0)
+				scene.camera.zoomOut(ZOOM_SENSITIVITY);
+			else if (mouse.wheelDelta < 0)
+				scene.camera.zoomIn(ZOOM_SENSITIVITY);
+		} else {
+			if (mouse.wheelDelta > 0) brushSize = Math.max(brushSize - 1, 1);
+			if (mouse.wheelDelta < 0) brushSize++;
 		}
+			
+	}
 
-		canvas.cursor = scene.main.getElementsWithScript(TYPE_SELECTOR).some(el => !el.hidden && el.collidePoint(mouse.screen)) ? "pointer" : "none";
+	if (keyboard.justPressed("Escape")) {
+		SETTINGS_SHOWN = !SETTINGS_SHOWN;
+		paused = SETTINGS_SHOWN;
+	}
 
-		const neg_x = !!(time % 2);
-		const neg_y = !!((time >> 1) % 2);
+	canvas.cursor = scene.main.getElementsWithScript(TYPE_SELECTOR).some(el => !el.hidden && el.collidePoint(mouse.world)) ? "pointer" : "none";
+}
 
-		for (let i = 0; i < WIDTH; i++) for (let j = 0; j < HEIGHT; j++)
-			grid[i][j].updated = false;
+function stepParticles() {
+	const newParticles = [];
 
-		const cells = Array.dim(CHUNK * CHUNK).map((_, i) => i);
+	for (let i = 0; i < particles.length; i++) {
+		const particle = particles[i];
+		if (particle.update())
+			newParticles.push(particle);
+		else particle.remove();
+	}
+
+	particles = newParticles;
+}
+
+function stepSimulation(time) {
+	const neg_x = !!(time % 2);
+	const neg_y = !!((time >> 1) % 2);
+
+	for (let i = 0; i < WIDTH; i++) for (let j = 0; j < HEIGHT; j++)
+		grid[i][j].updated = false;
+
+	const cells = Array.dim(CHUNK * CHUNK).map((_, i) => i);
+
+	for (let i = 0; i < cells.length; i++) {
+		const inx0 = i;
+		const inx1 = Random.int(0, cells.length - 1);
+		const t = cells[inx0];
+		cells[inx0] = cells[inx1];
+		cells[inx1] = t;
+	}
+
+	for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+		const cx = neg_x ? CHUNK_WIDTH - 1 - i : i;
+		const cy = neg_y ? CHUNK_HEIGHT - 1 - j : j;
+		const chunk = chunks[cx][cy];
+		if (chunk.sleep) continue;
+
+		const cxAbs = chunk.x * CHUNK;
+		const cyAbs = chunk.y * CHUNK;
 
 		for (let i = 0; i < cells.length; i++) {
-			const inx0 = i;
-			const inx1 = Random.int(0, cells.length - 1);
-			const t = cells[inx0];
-			cells[inx0] = cells[inx1];
-			cells[inx1] = t;
-		}
-
-		function processChunk(chunk) {
-			const cx = chunk.x * CHUNK;
-			const cy = chunk.y * CHUNK;
-
-			for (let i = 0; i < cells.length; i++) {
-				const coord = cells[i];
-				const x = cx + ~~(coord / CHUNK);
-				const y = cy + coord % CHUNK;
-				if (x >= WIDTH || y >= HEIGHT)
-					continue;
-				const cell = grid[x][y];
-				if (!cell.updated) {
-					DATA[cell.id].update(x, y);
-					cell.updated = true;
-				}
+			const coord = cells[i];
+			const x = cxAbs + ~~(coord / CHUNK);
+			const y = cyAbs + coord % CHUNK;
+			if (x >= WIDTH || y >= HEIGHT)
+				continue;
+			const cell = grid[x][y];
+			if (!cell.updated) {
+				DATA[cell.id].update(x, y);
+				cell.updated = true;
 			}
 		}
+	}
+}
 
-		const singleStep = keyboard.justPressed("Enter");
+function stepGraphics() {
+	const col = new Color(0, 0, 0, 1);
 
-		if (!paused || singleStep) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
-			const cx = neg_x ? CHUNK_WIDTH - 1 - i : i;
-			const cy = neg_y ? CHUNK_HEIGHT - 1 - j : j;
-			const chunk = chunks[cx][cy];
-			if (chunk.sleep) continue;
+	for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+		const chunk = chunks[i][j];
+		if (chunk.sleep && chunk.sleepNext)
+			continue;
 
-			processChunk(chunk);
+		const cx = chunk.x * CHUNK;
+		const cy = chunk.y * CHUNK;
+		for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
+			const x = cx + i;
+			const y = cy + j;
+			if (x >= WIDTH || y >= HEIGHT)
+				continue;
+
+			const cell = grid[x][y];
+			if (cell.id !== lastIds[x][y]) {
+				col.red = cell.id;
+				const element = DATA[cell.id];
+				tex.setPixel(x, y, element.getColor(x, y));
+				col.red = cell.id;
+				idTex.setPixel(x, y, col);
+				lastIds[x][y] = cell.id;
+			}
 		}
+	}
+}
 
-		const col = new Color(0, 0, 0, 1);
+function stepSleeping() {
+	for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+		const chunk = chunks[i][j];
+		chunk.sleep = chunk.sleepNext;
+		chunk.sleepNext = true;
+	}
+}
+
+function displayWorld() {
+	scene.camera.drawInWorldSpace(() => {
+		const image = rays({
+			direction: new Vector2(100000, -100000),//lightSources[0][0], lightSources[0][1]),
+			color: new Color(105, 105, 50),
+			ambient: new Color(200, 200, 200),
+			identity: !RTX,
+			ids: idTex,
+			transparency: 0.8
+		});
+		// renderer.fill(Color.BLACK);
+		// renderer.preservePixelart = false;
+		renderer.image(backgroundTex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
+		renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
+		// renderer.preservePixelart = true;
+		
+	});
+}
+
+function stepParticleGraphics() {
+	for (let i = 0; i < particles.length; i++) {
+		particles[i].draw();
+	}
+}
+
+function displayBrushPreview() {
+	scene.camera.drawInWorldSpace(() => {
+
+		// brush previews
+		const brushPreviewArgs = [eraseOnly ? Color.RED : Color.LIME, 1 / scene.camera.zoom];
+		const cellBrushSize = brushSize * CELL;
+		renderer.draw(brushPreviewArgs[0]).circle(mouse.world, brushPreviewArgs[1]);
+		switch (BRUSH_TYPES[brushType]) {
+			case "Circle":
+				renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize);
+				break;
+			case "Square":
+				renderer.stroke(...brushPreviewArgs).rect(Rect.fromMinMax(mouse.world.minus(cellBrushSize), mouse.world.plus(cellBrushSize)));
+				break;
+			case "Ring":
+				renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize);
+				renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize - CELL);
+				break;
+			case "Forceful": {
+				renderer.stroke(...brushPreviewArgs).shape(new Polygon(Polygon.regular(24, cellBrushSize).vertices.map((v, i) => i % 2 ? v.times(1.3) : v)).move(mouse.world));
+			}; break;
+			case "Row":
+				renderer.stroke(...brushPreviewArgs).rect(0, mouse.world.y - cellBrushSize, WIDTH * CELL, cellBrushSize * 2);
+				break;
+			case "Column":
+				renderer.stroke(...brushPreviewArgs).rect(mouse.world.x - cellBrushSize, 0, cellBrushSize * 2, HEIGHT * CELL);
+				break;
+
+		}
+	});
+}
+
+function displayDebugInfo() {
+	
+	if (keyboard.pressed("v")) {
+		if (!debugFrame)
+			debugFrame = new FastFrame(width, height);
+
+		debugFrame.renderer.transform = scene.camera;
+
+		if (debugOscillating) {
+			if (time % debugColorInterval == 0 && currentDebugColor == debugColor1) currentDebugColor = debugColor2;
+			else if (time % debugColorInterval == 0) currentDebugColor = debugColor1;
+		}
 
 		for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
 			const chunk = chunks[i][j];
 
 			if (chunk.sleep && chunk.sleepNext)
 				continue;
+
 			const cx = chunk.x * CHUNK;
 			const cy = chunk.y * CHUNK;
 			for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
@@ -3571,161 +4723,126 @@ intervals.continuous(time => {
 				if (x >= WIDTH || y >= HEIGHT)
 					continue;
 				const cell = grid[x][y];
-				if (cell.id !== lastIds[x][y]) {
-					col.red = cell.id;
-					const element = DATA[cell.id];
-					tex.setPixel(x, y, element.getColor(x, y));
-					col.red = cell.id;
-					idTex.setPixel(x, y, col);
-					lastIds[x][y] = cell.id;
+				if (cell.vel.sqrMag) {
+					debugFrame.renderer.stroke(currentDebugColor).arrow(x * CELL, y * CELL, x * CELL + cell.vel.x * CELL, y * CELL + cell.vel.y * CELL);
 				}
+
 			}
+
+			debugFrame.renderer.stroke(currentDebugColor).rect(i * CHUNK * CELL, j * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
 		}
 
-		scene.camera.drawInWorldSpace(() => {
-			if (keyboard.justPressed("g")) RTX = !RTX;
+		for (const particle of particles) {
+			debugFrame.renderer.stroke(currentDebugColor).arrow(Vector2.floor(particle.position).times(CELL), Vector2.floor(particle.position.plus(particle.velocity)).times(CELL));
+		}
 
-			const image = rays({
-				direction: new Vector2(100000, -100000),//lightSources[0][0], lightSources[0][1]),
-				color: new Color(105, 105, 50),
-				ambient: new Color(200, 200, 200),
-				identity: !RTX,
-				ids: idTex,
-				transparency: 0.8
-			});
-			// renderer.fill(Color.BLACK);
-			renderer.image(backgroundTex).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
-			renderer.image(image).rect(0, 0, WIDTH * CELL, HEIGHT * CELL);
-			
-			// brush previews
-			const brushPreviewArgs = [Color.LIME, 1 / scene.camera.zoom];
-			const cellBrushSize = brushSize * CELL;
-			renderer.draw(brushPreviewArgs[0]).circle(mouse.world, brushPreviewArgs[1]);
-			switch (BRUSH_TYPES[brushType]) {
-				case "Circle":
-					renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize);
-					break;
-				case "Square":
-					renderer.stroke(...brushPreviewArgs).rect(Rect.fromMinMax(mouse.world.minus(cellBrushSize), mouse.world.plus(cellBrushSize)));
-					break;
-				case "Ring":
-					renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize);
-					renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize - CELL);
-					break;
-				case "Forceful": {
-					renderer.stroke(...brushPreviewArgs).shape(new Polygon(Polygon.regular(24, cellBrushSize).vertices.map((v, i) => i % 2 ? v.times(1.3) : v)).move(mouse.world));
-				}; break;
-				case "Row":
-					renderer.stroke(...brushPreviewArgs).rect(0, mouse.world.y - cellBrushSize, WIDTH * CELL, cellBrushSize * 2);
-					break;
-				case "Column":
-					renderer.stroke(...brushPreviewArgs).rect(mouse.world.x - cellBrushSize, 0, cellBrushSize * 2, HEIGHT * CELL);
-					break;
-				case "EraseOnly":
-					renderer.stroke(Color.RED, ...brushPreviewArgs.slice(1)).circle(mouse.world, cellBrushSize);
-					break;
+		renderer.image(debugFrame).default(0, 0);
+		debugFrame.renderer.clear();
+	}
 
-			}
-		});
+	let densityMappingByResistance = false;
 
-		if (keyboard.pressed("v")) {
-			if (!debugFrame)
-				debugFrame = new FastFrame(width, height);
+	if (keyboard.pressed("b")) {
+		if (!debugFrame)
+			debugFrame = new FastFrame(width, height);
 
-			debugFrame.renderer.transform = scene.camera;
+		debugFrame.renderer.transform = scene.camera;
 
-			if (debugOscillating) {
-				if (time % debugColorInterval == 0 && currentDebugColor == debugColor1) currentDebugColor = debugColor2;
-				else if (time % debugColorInterval == 0) currentDebugColor = debugColor1;
-			}
+		const densityMap = Array.dim(CHUNK_WIDTH, CHUNK_HEIGHT);
 
-			for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
-				const chunk = chunks[i][j];
+		for (let k = 0; k < CHUNK_WIDTH; k++) for (let l = 0; l < CHUNK_HEIGHT; l++) {
+			let d = 0;
 
-				if (chunk.sleep && chunk.sleepNext)
+			const chunk = chunks[k][l];
+			const cx = chunk.x * CHUNK;
+			const cy = chunk.y * CHUNK;
+			debugFrame.renderer.draw(Color.WHITE).rect(k * CHUNK * CELL, l * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
+
+			for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
+				const x = cx + i;
+				const y = cy + j;
+
+				if (x >= WIDTH || y >= HEIGHT)
 					continue;
-
-				const cx = chunk.x * CHUNK;
-				const cy = chunk.y * CHUNK;
-				for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
-					const x = cx + i;
-					const y = cy + j;
-					if (x >= WIDTH || y >= HEIGHT)
-						continue;
-					const cell = grid[x][y];
-					if (cell.vel.sqrMag) {
-						debugFrame.renderer.stroke(currentDebugColor).arrow(x * CELL, y * CELL, x * CELL + cell.vel.x * CELL, y * CELL + cell.vel.y * CELL);
-					}
-
-				}
-
-				debugFrame.renderer.stroke(currentDebugColor).rect(i * CHUNK * CELL, j * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
-			}
-
-			renderer.image(debugFrame).default(0, 0);
-			debugFrame.renderer.clear();
-		}
-
-		let densityMappingByResistance = false;
-
-		if (keyboard.pressed("b")) {
-			if (!debugFrame)
-				debugFrame = new FastFrame(width, height);
-
-			debugFrame.renderer.transform = scene.camera;
-
-			const densityMap = Array.dim(CHUNK_WIDTH, CHUNK_HEIGHT);
-
-			for (let k = 0; k < CHUNK_WIDTH; k++) for (let l = 0; l < CHUNK_HEIGHT; l++) {
-				let d = 0;
-
-				const chunk = chunks[k][l];
-				const cx = chunk.x * CHUNK;
-				const cy = chunk.y * CHUNK;
-				debugFrame.renderer.draw(Color.WHITE).rect(k * CHUNK * CELL, l * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
-
-				for (let i = 0; i < CHUNK; i++) for (let j = 0; j < CHUNK; j++) {
-					const x = cx + i;
-					const y = cy + j;
-
-					if (x >= WIDTH || y >= HEIGHT)
-						continue;
-					const cell = grid[x][y];
-					if (cell.id != 0) {
-						if (!densityMappingByResistance) d++;
-						else d += DATA[cell.id].resistance;
-					}
-				}
-				d /= CHUNK * CHUNK;
-				let c = Color.lerp(Color.BLACK, Color.WHITE, d);
-				debugFrame.renderer.draw(c).rect(k * CHUNK * CELL, l * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
-				densityMap[k][l] = d;
-			}
-
-			renderer.image(debugFrame).default(0, 0);
-			debugFrame.renderer.clear();
-
-			if (keyboard.pressed("Shift")) {
-				renderer.textMode = TextMode.TOP_LEFT;
-				for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
-					text(Font.Arial10, Math.round(densityMap[i][j] * 100) / 100, i * CHUNK * CELL + 10, j * CHUNK * CELL + 10);
+				const cell = grid[x][y];
+				if (cell.id != 0) {
+					if (!densityMappingByResistance) d++;
+					else d += DATA[cell.id].resistance;
 				}
 			}
+			d /= CHUNK * CHUNK;
+			let c = Color.lerp(Color.BLACK, Color.WHITE, d);
+			debugFrame.renderer.draw(c).rect(k * CHUNK * CELL, l * CHUNK * CELL, CHUNK * CELL, CHUNK * CELL);
+			densityMap[k][l] = d;
 		}
 
-		if (!paused || singleStep) for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
-			const chunk = chunks[i][j];
-			chunk.sleep = chunk.sleepNext;
-			chunk.sleepNext = true;
+		renderer.image(debugFrame).default(0, 0);
+		debugFrame.renderer.clear();
+
+		if (keyboard.pressed("Shift")) {
+			renderer.textMode = TextMode.TOP_LEFT;
+			for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
+				text(Font.Arial10, Math.round(densityMap[i][j] * 100) / 100, i * CHUNK * CELL + 10, j * CHUNK * CELL + 10);
+			}
 		}
+	}
+}
+
+function injectDynamicBodies() {
+	const dyn = scene.main.getElementsWithScript(DYNAMIC_OBJECT);
+	for (let i = 0; i < dyn.length; i++) 
+		dyn[i].scripts.DYNAMIC_OBJECT.inject();
+}
+
+function extractDynamicBodies() {
+	const dyn = scene.main.getElementsWithScript(DYNAMIC_OBJECT);
+	for (let i = 0; i < dyn.length; i++) 
+		dyn[i].scripts.DYNAMIC_OBJECT.extract();
+}
+
+intervals.continuous(time => {
+	// try {
+		
+		handleInput();
+		injectDynamicBodies();
+		handleBrushInput();
+		
+		const singleStep = keyboard.justPressed("Enter");
+
+		const simStep = !paused || singleStep;
+		if (simStep) {
+			stepSimulation(time);
+			stepParticles();
+		}
+		
+		stepGraphics();
+		stepParticleGraphics();
+		extractDynamicBodies(); // also displays them
+		
+		if (simStep) stepSleeping();
+
+		displayWorld();
+		displayBrushPreview();
+		displayDebugInfo();
+
 
 		if (!SELECTORS_SHOWN) {
+			let hoveredElementType = TYPES.AIR;
+			let hoveredElementActs = 0;
+			{
+				const coord = Vector2.floor(mouse.world.over(CELL));
+				if (Element.inBounds(coord.x, coord.y)) {
+					hoveredElementType = grid[coord.x][coord.y].id;
+					hoveredElementActs = grid[coord.x][coord.y].acts;
+				}
+			};
+			
 			renderer.textMode = TextMode.TOP_LEFT;
 			text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, brushType: ${BRUSH_TYPES[brushType]} | ${brushType}, paused: ${paused}, RTX: ${RTX}, fps: ${intervals.fps}`, 10, 10);
 			renderer.textMode = TextMode.TOP_RIGHT;
 			text(Font.Arial15, hoveredElementType ? typeName(hoveredElementType) + (hoveredElementActs ? " (" + hoveredElementActs + ")" : "") : "", width - 10, 10);
 		}
-	} catch (err) {
-		alert(err + "\n" + err.stack);
-	}
+	// } catch (err) {
+	// 	alert(err + "\n" + err.stack);
+	// }
 }, IntervalFunction.UPDATE);
