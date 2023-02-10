@@ -143,6 +143,7 @@ class WorldSave {
 				buffer.write.uint8(cell.id);
 				if (cell.id) {
 					buffer.write.uint8(cell.reference);
+					// buffer.write.unit16(cell.vel); //TODO add vel to save and load game
 					buffer.write.uint32(cell.acts);
 				}
 			}
@@ -182,11 +183,13 @@ class WorldSave {
 			const id = buffer.read.uint8();
 			if (id) {
 				const reference = buffer.read.uint8();
+				// const vel = buffer.read.unit16(); //TODO add vel to save and load game
 				const acts = buffer.read.int32();
 				for (let i = 0; i < duration; i++) {
 					const cell = save.grid[x][y];
 					cell.id = idMap[id];
 					cell.reference = idMap[reference];
+					// cell.vel = vel;
 					cell.acts = acts;
 
 					y++;
@@ -1287,10 +1290,11 @@ const NEURON = new Set([TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON])
 const BRAIN = new Set([...NEURON, TYPES.CEREBRUM])
 const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD, TYPES.BONE])
 const THICKETS = new Set([TYPES.THICKET, TYPES.INCENSE, TYPES.THICKET_BUD, TYPES.THICKET_SEED, TYPES.INCENSE_SMOKE, TYPES.THICKET_STEM]);
-const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS]);
+const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS, TYPES.GHOST_CORAL]);
 const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL, TYPES.CORPOREAL_CORAL])
 const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL, TYPES.GHOST_CORAL])
-const GHOST_CORAL_UNREACTIVE = new Set([...CORAL_OFF, ...CORAL_ON, ...CONVEYOR_RESISTANT, TYPES.GLASS, TYPES.AIR]);
+const CORALS = new Set([...CORAL_OFF, ...CORAL_ON, TYPES.CORAL_CONSUMER, TYPES.CORAL_PRODUCER, TYPES.CORAL_STIMULANT]);
+const GHOST_CORAL_UNREACTIVE = new Set([...CORALS, ...CONVEYOR_RESISTANT, TYPES.GLASS, TYPES.AIR]);
 const GHOST_CORAL_REACT = new Set(Object.values(TYPES));
 GHOST_CORAL_REACT.delete(TYPES.PARTICLE);
 for (const type of GHOST_CORAL_UNREACTIVE)
@@ -2091,10 +2095,7 @@ const DATA = {
 		
 		if(!Element.inBounds(x, Math.round(y + cell.vel.y))) cell.vel.y = -cell.vel.y;
 
-		if (!Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y), BEAM_PASSTHROUGH)) Element.die(x,y);
-		else cell.acts+=2;
-		cell.acts++;
-		if(cell.acts > 100) Element.die(x,y);
+		if (Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y), BEAM_PASSTHROUGH)) Element.die(x,y);
 	}),
 
 	[TYPES.MUSCLE]: new Element(1, (x, y) => {
@@ -2301,20 +2302,15 @@ const DATA = {
 		c = Random.choice(freqColoring([["#a1948f01", 1], ["#948a8701", 2], ["#87817f01", 1]]));
 		if (p > .5 && p < .52 && Random.bool(.35)) c = new Color("#afa09701");
 		return Color.lerp(c, new Color("#00000001"), .6);
-	}, 0.45, 0.01, (x, y) => {
-		//TODO make it actually ghost like
-		// let permeator = TYPES.GHOST_CORAL;
+	}, 0.2, 0, (x, y) => {
 		let violence = 5
-		// let permeatee = GHOST_CORAL_REACT;
-		// let soaker = TYPES.AIR;
-		// try {
+
+		try {
 		let ox = x;
 		let d = 1;
 
 		while (Element.isType(ox, y + d, TYPES.GHOST_CORAL)) {
 			d++;
-			// let p = Random.perlin(y + d + intervals.frameCount, 0.25, x);
-			// ox += Math.round(Number.remap(p, 0, 1, -violence, violence));
 		}
 
 		if (Element.inBounds(ox, y + d) && Element.isEmpty(ox, y + d) && Element.isTypes(x, y - 1, GHOST_CORAL_REACT)) {
@@ -2322,7 +2318,7 @@ const DATA = {
 			if (Element.isTypes(x, y - 1, GHOST_CORAL_REACT)) Element.die(x, y - 1);
 			else Element.updateCell(x, y);
 		}
-		// } catch (e) { alert(e + "\n" + e.stack) }
+		} catch (e) { alert(e + "\n" + e.stack) }
 	}),
 	
 	[TYPES.CORAL_STIMULANT]: new Element(1, freqColoring([
@@ -4446,11 +4442,12 @@ const ZOOM_SENSITIVITY = 0.1
 let SELECTORS_SHOWN = true;
 let SETTINGS_SHOWN = false;
 
-const BRUSH_TYPES = ["Circle", "Square", "Ring", "Forceful", "Row", "Column"];
+const BRUSH_TYPES = ["Circle", "Square", "Ring", "Forceful", "Row", "Column", "Line Drawing"];
 let brushType = 0;
 let eraseOnly = false;
-let drawingPoints = new Set();
+let lineDrawingPoints = new Set([]);
 let lastDrawingPoint = undefined;
+const drawingRange = 5;
 
 let currentDebugColor = Color.RED;
 let debugColor1 = Color.RED;
@@ -4519,6 +4516,20 @@ function handleBrushInput() {
 					);
 				}
 			}
+			const handleLine = (x, y, x1, y1, chance = 0.2, passthrough = undefined) => {
+				const minX = Math.min(x, x1) - r;
+				const minY = Math.min(y, y1) - r;
+				const maxX = Math.max(x, x1) + r;
+				const maxY = Math.max(y, y1) + r;
+				const line = new Line(x, y, x1, y1);
+				for (let i = minX; i <= maxX; i++) for (let j = minY; j <= maxY; j++) {
+					const p = new Vector2(i, j);
+					if (Element.inBounds(i, j) && line.distanceTo(p) < r) {
+						handleCell(i,j);
+					}
+				}
+			}
+
 			if (brushType == 0) { // Circle
 				for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 					if (i * i + j * j < r * r) {
@@ -4584,9 +4595,39 @@ function handleBrushInput() {
 					handleCell(x, y);
 				}
 			}
-			else if (brushType == 6){ // TODO line drawing, erase only = apply, changing brush type will clear it,
+			else if (brushType == 6) { // TODO line drawing, right click = apply, erase only = clear, changing brush type will clear it,
 				//need to add a limiter so it doesn't create 50 of the same points, it will be rounded
 				//size of the brush = size of line using make lines
+				if(keyboard.pressed("k")){
+					lineDrawingPoints.clear();
+				}
+				if(keyboard.pressed("m")){
+					console.log("click");
+					let prevValue;
+					let currentValue;
+					let values = lineDrawingPoints.values();
+					prevValue = values.next();
+					for (const value of lineDrawingPoints) {
+						currentValue = value;
+						handleLine(prevValue[0], prevValue[1], currentValue[0], currentValue[1]);
+						prevValue = currentValue;
+					}
+					lineDrawingPoints.clear();
+				}
+				if(keyboard.pressed("n")){
+					if(lineDrawingPoints.size == 0 || !((Math.abs(ox-lastDrawingPoint[0]) < drawingRange) && (Math.abs(oy-lastDrawingPoint[1]) < drawingRange))){
+						lineDrawingPoints.add([ox,oy]);
+						lastDrawingPoint = [ox,oy]
+						// console.log(lastDrawingPoint);
+						// console.log(lineDrawingPoints);
+						console.log(ox + " | " + oy);
+						console.log(mouse.world);
+						console.log((Math.abs(ox-lastDrawingPoint[0]) < 5) + " | " + (Math.abs(oy-lastDrawingPoint[1]) < 5));
+					}// makeLine(oxl, oyl, oxl+10, oyl+10, TYPES.STONE, 5);
+					//apply
+					console.log("clack");
+					
+				}
 			}
 		}
 	}
@@ -4599,6 +4640,7 @@ function handleInput() {
 		for (let y = 0; y < HEIGHT; y++)
 			Element.setCell(x, y, TYPES.AIR);
 		scene.main.removeElements(scene.main.getElementsWithScript(DYNAMIC_OBJECT));
+		lineDrawingPoints.clear();
 		for (let i = 0; i < particles.length; i++)
 			particles[i].remove();
 		particles = [];	
@@ -4883,6 +4925,21 @@ function displayBrushPreview() {
 				break;
 			case "Column":
 				renderer.stroke(...brushPreviewArgs).rect(mouse.world.x - cellBrushSize, 0, cellBrushSize * 2, HEIGHT * CELL);
+				break;
+			case "Line Drawing":
+				renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize);
+				renderer.stroke(...brushPreviewArgs).rect(Rect.fromMinMax(mouse.world.minus(cellBrushSize), mouse.world.plus(cellBrushSize)));
+
+				let prevValue;
+						let currentValue;
+						let values = lineDrawingPoints.values();
+						prevValue = values.next();
+						for (const value of lineDrawingPoints) {
+							currentValue = value;
+							renderer.stroke(...brushPreviewArgs).line(prevValue[0]*3, prevValue[1]*3, currentValue[0]*3, currentValue[1]*3);
+							prevValue = currentValue;
+						}
+						if(!(lineDrawingPoints.size == 0)) renderer.draw(Color.BLUE).circle(lastDrawingPoint[0] * 3, lastDrawingPoint[1] * 3, 2.5 / scene.camera.zoom);
 				break;
 		}
 	});
