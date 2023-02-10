@@ -40,7 +40,7 @@ const TYPES = Object.fromEntries([
 	"GLAZE_BASE", "DECUMAN_GLAZE",
 	"PRIDIUM", "GENDERFLUID",
 	"PARTICLE",
-	"EXOTHERMIA", "FIRE", "BLUE_FIRE",
+	"EXOTHERMIA", "FIRE", "BLUE_FIRE", "BOUNCE_BEAM",
 	"BAHHUM",
 	"ESTIUM", "ESTIUM_GAS",
 	"DDT", "ANT", "DAMSELFLY", "BEE", "HIVE", "HONEY", "SUGAR",
@@ -59,7 +59,7 @@ const TYPES = Object.fromEntries([
 	"IRON", "LIQUID_IRON", "RUST",
 	"MERCURY", "TERMINATOR",
 	"RADIUM", "ACTINIUM", "THORIUM",
-	"LIGHTNING", "LIGHT", "LIGHT_SAD",
+	"LIGHTNING", "LIGHT", "LIGHT_SAD", "BOUNCY_BALL",
 	"BLOOD", "MUSCLE", "BONE", "EPIDERMIS", "INACTIVE_NEURON", "ACTIVE_NEURON", "CEREBRUM",
 	"CORAL", "DEAD_CORAL", "ELDER_CORAL", "PETRIFIED_CORAL", "CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER", 
 ].map((n, i) => [n, i]));
@@ -1291,10 +1291,14 @@ const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS]);
 const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL])
 const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL])
 
+const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR,TYPES.AIR]);
+const HEAT = new Set([TYPES.FIRE,TYPES.BLUE_FIRE,TYPES.LAVA,TYPES.POWER_LAVA,TYPES.EXOTHERMIA]);
+const GERMANIUM_PASSTHROUGH = new Set([TYPES.GERMANIUM]);
+const BEAM_PASSTHROUGH = new Set([TYPES.BOUNCE_BEAM, TYPES.AIR, ...SOLID]);
+
 function updatePixel(x, y) {
 	tex.setPixel(x, y, DATA[grid[x][y].id].getColor(x, y));
 }
-
 class Particle {
 	constructor(position, velocity) {
 		this.cell = grid[position.x][position.y].get();
@@ -1410,6 +1414,7 @@ let particles = [];
 
 function createParticle(position, velocity) {
 	particles.push(new Particle(position, velocity));
+	
 }
 
 const genderfluidFlag = flag([
@@ -2021,6 +2026,70 @@ const DATA = {
 		Element.setCell(x, y, Random.bool(.05) ? TYPES.ASH : Random.bool(.05) ? TYPES.STEAM : TYPES.SMOKE);
 		if (Random.bool(.25)) Element.trySetCell(x, y - 1, TYPES.RUST);
 		return true;
+	}),
+
+	[TYPES.BOUNCY_BALL]: new Element(0,(x, y)=>{
+		const color = Color.alpha(new Color("#de1b86"),0);
+		const layer = (x, y) => {
+			const angle = Math.PI / 2;
+			const c = Math.cos(angle);
+			const s = Math.sin(angle);
+			[x, y] = [x * c - y * s, x * s + y * c];
+			y += Random.perlin(x, 5) * 3;
+			const p = Random.voronoi2D(x, y, 0.1);
+			return Color.colorScale(color, (1 - p) * 0.25 + 0.5);
+		};
+		return layer(x, y);
+	}, 0.9, 0.4,(x, y)=>{
+		const airResist = 0.1;
+		const cellV = grid[x][y].vel;
+		if (cellV.x == 0){
+			cellV.x += (Random.bool(0.5)) ? -1 : 1;
+		}
+		cellV.mag = Number.clamp(cellV.mag, 0, 5);
+		if (Element.isEmpty(Math.round(x + cellV.x), y, LIQUID_PASS_THROUGH)){
+			cellV.x = -cellV.x;
+		}
+		if (Element.isEmpty(x, Math.round(y + cellV.y + GRAVITY), LIQUID_PASS_THROUGH)){
+			cellV.y = -cellV.y;
+		}
+		cellV.y += 3*GRAVITY;
+
+		Element.tryMove(x, y, Math.round(x + cellV.x), Math.round(y + cellV.y), LIQUID_PASS_THROUGH);
+		Element.updateCell(x,y);
+	}, (x, y)=>{
+		if (Random.bool(0.99)) Element.trySetCell(x, y, TYPES.SMOKE);
+		else Element.trySetCell(x, y, TYPES.ACID); 
+	}),
+	
+	[TYPES.BOUNCE_BEAM]: new Element(0,(x,y)=>{
+		const color = new Color("#de1b86");
+		const layer = (x, y) => {
+			const angle = Math.PI / 2;
+			const c = Math.cos(angle);
+			const s = Math.sin(angle);
+			[x, y] = [x * c - y * s, x * s + y * c];
+			y += Random.perlin(x, 5) * 3;
+			const p = Random.voronoi2D(x, y, 0.1);
+			return Color.colorScale(color, (1 - p) * 0.25 + 0.5);
+		};
+		return layer(x, y);
+	}, 0, 0.9, (x,y) => {
+		const cell = grid[x][y];
+		if(cell.acts == 0){
+			cell.vel.x = Random.bool(0.5) ? 1 : -1;
+			cell.vel.y = Random.bool(0.5) ? 1 : -1;
+			cell.acts = 1;
+		}
+
+		if(!Element.inBounds(Math.round(x + cell.vel.x), y)) cell.vel.x = -cell.vel.x;
+		
+		if(!Element.inBounds(x, Math.round(y + cell.vel.y))) cell.vel.y = -cell.vel.y;
+
+		if (!Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y), BEAM_PASSTHROUGH)) Element.die(x,y);
+		else cell.acts+=2;
+		cell.acts++;
+		if(cell.acts > 100) Element.die(x,y);
 	}),
 
 	[TYPES.MUSCLE]: new Element(1, (x, y) => {
@@ -4320,7 +4389,7 @@ const ZOOM_SENSITIVITY = 0.1
 let SELECTORS_SHOWN = true;
 let SETTINGS_SHOWN = false;
 
-const BRUSH_TYPES = ["Circle", "Square", "Ring", "Forceful", "Row", "Column"]
+const BRUSH_TYPES = ["Circle", "Square", "Ring", "Forceful", "Row", "Column"];
 let brushType = 0;
 let eraseOnly = false;
 
@@ -4381,6 +4450,16 @@ function handleBrushInput() {
 						Element.setCell(x, y, brush);
 				}
 			};
+			const freezeParticle = (x,y) => {
+				if (Element.inBounds(x, y)) {
+					particles.filter((p, index, arr) => 
+						(Math.abs(p.position.x - x) < 1) && (Math.abs(p.position.y - y) < 1))
+						.forEach((particle, index, arr)=>{
+							if(Element.isEmpty(x, y)) particle.solidify();
+						}
+					);
+				}
+			}
 			if (brushType == 0) { // Circle
 				for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 					if (i * i + j * j < r * r) {
@@ -4414,14 +4493,19 @@ function handleBrushInput() {
 					if (i * i + j * j < r * r) {
 						const x = i + ox;
 						const y = j + oy;
-						handleCell(x, y);
-						if (Element.inBounds(x, y)) createParticle(
-							new Vector2(x, y),
-							new Vector2(
-								vel * i + Random.range(-CHAOS, CHAOS),
-								vel * j + Random.range(-CHAOS, CHAOS)
-							)
-						);
+						if (!eraseOnly){
+							handleCell(x, y);
+							
+							if (Element.inBounds(x, y)) createParticle(
+								new Vector2(x, y),
+								new Vector2(
+									vel * i + Random.range(-CHAOS, CHAOS),
+									vel * j + Random.range(-CHAOS, CHAOS)
+								)
+							);
+						} else{
+							if (Element.inBounds(x, y)) freezeParticle(x,y);
+						}
 					}
 				}
 			}
@@ -4439,21 +4523,6 @@ function handleBrushInput() {
 					const x = j + ox;
 					const y = i;
 					handleCell(x, y);
-				}
-			}
-			else if (brushType == 6) { // EraseOnly
-				if (brush !== TYPES.EXOTHERMIA && brush !== TYPES.AIR) for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-					if (i * i + j * j < r * r) {
-						const x = i + ox;
-						const y = j + oy;
-						if (Element.inBounds(x, y)) {
-							const { id } = grid[x][y];
-							if (
-								id === brush ||
-								(DATA[id].reference && grid[x][y].reference === brush)
-							) Element.setCell(x, y, TYPES.AIR);
-						}
-					}
 				}
 			}
 		}
@@ -4752,7 +4821,6 @@ function displayBrushPreview() {
 			case "Column":
 				renderer.stroke(...brushPreviewArgs).rect(mouse.world.x - cellBrushSize, 0, cellBrushSize * 2, HEIGHT * CELL);
 				break;
-
 		}
 	});
 }
