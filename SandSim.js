@@ -61,7 +61,7 @@ const TYPES = Object.fromEntries([
 	"RADIUM", "ACTINIUM", "THORIUM",
 	"LIGHTNING", "LIGHT", "LIGHT_SAD", "BOUNCY_BALL",
 	"BLOOD", "MUSCLE", "BONE", "EPIDERMIS", "INACTIVE_NEURON", "ACTIVE_NEURON", "CEREBRUM",
-	"CORAL", "DEAD_CORAL", "ELDER_CORAL", "PETRIFIED_CORAL", "CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER", 
+	"CORAL", "DEAD_CORAL", "ELDER_CORAL", "PETRIFIED_CORAL", "GHOST_CORAL", "CORPOREAL_CORAL", "CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER", 
 ].map((n, i) => [n, i]));
 
 const ELEMENT_COUNT = Object.keys(TYPES).length;
@@ -1288,8 +1288,13 @@ const BRAIN = new Set([...NEURON, TYPES.CEREBRUM])
 const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD, TYPES.BONE])
 const THICKETS = new Set([TYPES.THICKET, TYPES.INCENSE, TYPES.THICKET_BUD, TYPES.THICKET_SEED, TYPES.INCENSE_SMOKE, TYPES.THICKET_STEM]);
 const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS]);
-const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL])
-const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL])
+const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL, TYPES.CORPOREAL_CORAL])
+const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL, TYPES.GHOST_CORAL])
+const GHOST_CORAL_UNREACTIVE = new Set([...CORAL_OFF, ...CORAL_ON, ...CONVEYOR_RESISTANT, TYPES.GLASS, TYPES.AIR]);
+const GHOST_CORAL_REACT = new Set(Object.values(TYPES));
+GHOST_CORAL_REACT.delete(TYPES.PARTICLE);
+for (const type of GHOST_CORAL_UNREACTIVE)
+	GHOST_CORAL_REACT.delete(type);
 
 const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR,TYPES.AIR]);
 const HEAT = new Set([TYPES.FIRE,TYPES.BLUE_FIRE,TYPES.LAVA,TYPES.POWER_LAVA,TYPES.EXOTHERMIA]);
@@ -2231,6 +2236,8 @@ const DATA = {
 		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.CORAL)){
 			Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL, 1, true);
 			Element.react(x, y, TYPES.PETRIFIED_CORAL, TYPES.ELDER_CORAL, .5, true);
+			Element.react(x, y, TYPES.GHOST_CORAL, TYPES.CORPOREAL_CORAL, 1, true);
+
 		}
 		grid[x][y].acts-=2;
 
@@ -2256,6 +2263,7 @@ const DATA = {
 		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.ELDER_CORAL)){
 			Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL, .5, true);
 			Element.react(x, y, TYPES.PETRIFIED_CORAL, TYPES.ELDER_CORAL, 1, true);
+			Element.react(x, y, TYPES.GHOST_CORAL, TYPES.CORPOREAL_CORAL, .5, true);
 		}
 		grid[x][y].acts-=2;
 
@@ -2269,12 +2277,62 @@ const DATA = {
 		return Color.lerp(c, new Color("#00000001"), .6);
 	}, 0.45, 0.01),
 
+	[TYPES.CORPOREAL_CORAL]: new Element(1, (x, y) => {	
+		c = Random.choice(freqColoring([["#f5673302", 1], ["#fa7e4d02", 1], ["#f5916902", 1],]));
+		return Color.lerp(c, new Color("#00000001"), .5);
+	}, 0.4, 0.04, (x, y) => {
+		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 400;
+			if (Element.isTypes(ox, oy, CORAL_ON) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = Math.min(100, grid[ox][oy].acts--);
+		})
+		if (grid[x][y].acts <= 0) Element.setCell(x, y, TYPES.GHOST_CORAL);
+		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.CORPOREAL_CORAL)){
+			Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL, .5, true);
+			Element.react(x, y, TYPES.PETRIFIED_CORAL, TYPES.ELDER_CORAL, .5, true);
+			Element.react(x, y, TYPES.GHOST_CORAL, TYPES.CORPOREAL_CORAL, 1, true);
+		}
+		grid[x][y].acts-=1;
+
+		Element.updateCell(x, y)
+	}),
+
+	[TYPES.GHOST_CORAL]: new Element(1, (x, y) => {
+		const p = Random.octave(4, Random.perlin2D, x, y, .05);
+		c = Random.choice(freqColoring([["#a1948f01", 1], ["#948a8701", 2], ["#87817f01", 1]]));
+		if (p > .5 && p < .52 && Random.bool(.35)) c = new Color("#afa09701");
+		return Color.lerp(c, new Color("#00000001"), .6);
+	}, 0.45, 0.01, (x, y) => {
+		//TODO make it actually ghost like
+		// let permeator = TYPES.GHOST_CORAL;
+		let violence = 5
+		// let permeatee = GHOST_CORAL_REACT;
+		// let soaker = TYPES.AIR;
+		// try {
+		let ox = x;
+		let d = 1;
+
+		while (Element.isType(ox, y + d, TYPES.GHOST_CORAL)) {
+			d++;
+			// let p = Random.perlin(y + d + intervals.frameCount, 0.25, x);
+			// ox += Math.round(Number.remap(p, 0, 1, -violence, violence));
+		}
+
+		if (Element.inBounds(ox, y + d) && Element.isEmpty(ox, y + d) && Element.isTypes(x, y - 1, GHOST_CORAL_REACT)) {
+			Element.setCell(ox, y + d, grid[x][y-1].id);
+			if (Element.isTypes(x, y - 1, GHOST_CORAL_REACT)) Element.die(x, y - 1);
+			else Element.updateCell(x, y);
+		}
+		// } catch (e) { alert(e + "\n" + e.stack) }
+	}),
+	
 	[TYPES.CORAL_STIMULANT]: new Element(1, freqColoring([
 		["#0be37e01", 2], ["#08cf7201", 1], ["#05fa8801", 2], 
 	]), 0.2, 0.1, (x, y) => {
 		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
 			if (Element.isType(ox, oy, TYPES.DEAD_CORAL)) Element.setCell(ox, oy, TYPES.CORAL)
 			if (Element.isType(ox, oy, TYPES.PETRIFIED_CORAL)) Element.setCell(ox, oy, TYPES.ELDER_CORAL)
+			if (Element.isType(ox, oy, TYPES.GHOST_CORAL)) Element.setCell(ox, oy, TYPES.CORPOREAL_CORAL)
+
 		})
 		solidUpdate(x, y, undefined, undefined, (x, y, fx, fy) => {
 			if (Element.tryMove(x, y, fx, fy))
@@ -2300,7 +2358,7 @@ const DATA = {
 		["#b34aed01", 1], ["#a743de01", 1], ["#993dcc01", 1], 
 	]), 0.2, 0.1, (x, y) => {
 		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
-			if ((Element.isType(ox, oy, TYPES.CORAL) || Element.isType(ox, oy, TYPES.ELDER_CORAL)) && Element.isType(x, y - 1, TYPES.CORAL_STIMULANT)) Element.setCell(x, y - 1, TYPES.AIR);
+			if (Element.isTypes(ox, oy, CORAL_ON) && Element.isType(x, y - 1, TYPES.CORAL_STIMULANT)) Element.setCell(x, y - 1, TYPES.AIR);
 		})
 	}),
 
@@ -3246,7 +3304,6 @@ const DATA = {
 
 		if (Element.isType(x, y - 1, TYPES.WATER))
 			Element.permeate(x, y, TYPES.DAMP_SOIL, TYPES.SOIL, TYPES.WATER, 2);
-
 		if (Element.isType(x, y - 1, TYPES.AIR) && Element.threeCheck(x, y + 1, TYPES.DAMP_SOIL)) {
 			if (Random.bool(.0001))
 				Element.setCell(x, y - 1, TYPES.GRASS);
@@ -4392,6 +4449,8 @@ let SETTINGS_SHOWN = false;
 const BRUSH_TYPES = ["Circle", "Square", "Ring", "Forceful", "Row", "Column"];
 let brushType = 0;
 let eraseOnly = false;
+let drawingPoints = new Set();
+let lastDrawingPoint = undefined;
 
 let currentDebugColor = Color.RED;
 let debugColor1 = Color.RED;
@@ -4453,9 +4512,9 @@ function handleBrushInput() {
 			const freezeParticle = (x,y) => {
 				if (Element.inBounds(x, y)) {
 					particles.filter((p, index, arr) => 
-						(Math.abs(p.position.x - x) < 1) && (Math.abs(p.position.y - y) < 1))
+						(Math.abs(p.position.x - x) < 1) && (Math.abs(p.position.y - y) < 1) && (Element.isEmpty(x, y)))
 						.forEach((particle, index, arr)=>{
-							if(Element.isEmpty(x, y)) particle.solidify();
+							particle.solidify();
 						}
 					);
 				}
@@ -4504,7 +4563,7 @@ function handleBrushInput() {
 								)
 							);
 						} else{
-							if (Element.inBounds(x, y)) freezeParticle(x,y);
+							freezeParticle(x,y);
 						}
 					}
 				}
@@ -4524,6 +4583,10 @@ function handleBrushInput() {
 					const y = i;
 					handleCell(x, y);
 				}
+			}
+			else if (brushType == 6){ // TODO line drawing, erase only = apply, changing brush type will clear it,
+				//need to add a limiter so it doesn't create 50 of the same points, it will be rounded
+				//size of the brush = size of line using make lines
 			}
 		}
 	}
