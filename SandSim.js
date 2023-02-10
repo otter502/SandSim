@@ -4445,7 +4445,7 @@ let SETTINGS_SHOWN = false;
 const BRUSH_TYPES = ["Circle", "Square", "Ring", "Forceful", "Row", "Column", "Line Drawing"];
 let brushType = 0;
 let eraseOnly = false;
-let lineDrawingPoints = new Set([]);
+let lineDrawingPoints = ([]);
 let lastDrawingPoint = undefined;
 const drawingRange = 5;
 
@@ -4599,24 +4599,24 @@ function handleBrushInput() {
 				//need to add a limiter so it doesn't create 50 of the same points, it will be rounded
 				//size of the brush = size of line using make lines
 				if(keyboard.pressed("k")){
-					lineDrawingPoints.clear();
+					lineDrawingPoints = [];
 				}
 				if(keyboard.pressed("m")){
 					console.log("click");
 					let prevValue;
 					let currentValue;
 					let values = lineDrawingPoints.values();
-					prevValue = values.next();
+					prevValue = lineDrawingPoints[0];
 					for (const value of lineDrawingPoints) {
 						currentValue = value;
 						handleLine(prevValue[0], prevValue[1], currentValue[0], currentValue[1]);
 						prevValue = currentValue;
 					}
-					lineDrawingPoints.clear();
+					lineDrawingPoints = [];
 				}
 				if(keyboard.pressed("n")){
-					if(lineDrawingPoints.size == 0 || !((Math.abs(ox-lastDrawingPoint[0]) < drawingRange) && (Math.abs(oy-lastDrawingPoint[1]) < drawingRange))){
-						lineDrawingPoints.add([ox,oy]);
+					if(lineDrawingPoints.length == 0 || !((Math.abs(ox-lastDrawingPoint[0]) < drawingRange) && (Math.abs(oy-lastDrawingPoint[1]) < drawingRange))){
+						lineDrawingPoints.push([ox,oy]);
 						lastDrawingPoint = [ox,oy]
 						// console.log(lastDrawingPoint);
 						// console.log(lineDrawingPoints);
@@ -4640,7 +4640,7 @@ function handleInput() {
 		for (let y = 0; y < HEIGHT; y++)
 			Element.setCell(x, y, TYPES.AIR);
 		scene.main.removeElements(scene.main.getElementsWithScript(DYNAMIC_OBJECT));
-		lineDrawingPoints.clear();
+		lineDrawingPoints = [];
 		for (let i = 0; i < particles.length; i++)
 			particles[i].remove();
 		particles = [];	
@@ -4933,13 +4933,13 @@ function displayBrushPreview() {
 				let prevValue;
 						let currentValue;
 						let values = lineDrawingPoints.values();
-						prevValue = values.next();
+						prevValue = lineDrawingPoints[0];
 						for (const value of lineDrawingPoints) {
 							currentValue = value;
 							renderer.stroke(...brushPreviewArgs).line(prevValue[0]*3, prevValue[1]*3, currentValue[0]*3, currentValue[1]*3);
 							prevValue = currentValue;
 						}
-						if(!(lineDrawingPoints.size == 0)) renderer.draw(Color.BLUE).circle(lastDrawingPoint[0] * 3, lastDrawingPoint[1] * 3, 2.5 / scene.camera.zoom);
+						if(!(lineDrawingPoints.length == 0)) renderer.draw(Color.BLUE).circle(lastDrawingPoint[0] * 3, lastDrawingPoint[1] * 3, 2.5 / scene.camera.zoom);
 				break;
 		}
 	});
