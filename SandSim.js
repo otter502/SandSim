@@ -231,9 +231,16 @@ class WorldSave {
 	}
 }
 
-const SAVE_FILE_PATH = "world.sand";
+const SAVE_FILE_PATH = "world.vand";
 
-fileSystem.createFileType(WorldSave, ["sand"]);
+fileSystem.createFileType(WorldSave, ["sand", "vand"]);
+
+class ClipBoardSave{
+	constructor(){
+		this.clipBoard = [[]];
+
+	}
+}
 
 class Cell {
 	constructor(id) {
@@ -550,7 +557,7 @@ class DYNAMIC_OBJECT extends ElementScript {
 					.sort((a, b) => a - b);
 	
 				for (let n = 0; n < stops.length; n += 2) {
-					const startY = Math.floor(stops[n]) - 1;
+					const startY = Math.max(minY, Math.floor(stops[n]) - 1);
 					const endY = Math.ceil(stops[n + 1]);
 					for (let j = startY; j <= endY; j++) {
 						for (let ii = 0; ii < DYNAMIC_OBJECT.RES; ii++)
@@ -1294,11 +1301,13 @@ const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS, TYPES.GHOST_CORAL]);
 const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL, TYPES.CORPOREAL_CORAL])
 const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL, TYPES.GHOST_CORAL])
 const CORALS = new Set([...CORAL_OFF, ...CORAL_ON, TYPES.CORAL_CONSUMER, TYPES.CORAL_PRODUCER, TYPES.CORAL_STIMULANT]);
-const GHOST_CORAL_UNREACTIVE = new Set([...CORALS, ...CONVEYOR_RESISTANT, TYPES.GLASS, TYPES.AIR]);
+const GHOST_CORAL_UNREACTIVE = new Set([...CORALS, TYPES.GLASS, ...CONVEYOR_RESISTANT, TYPES.AIR]);
 const GHOST_CORAL_REACT = new Set(Object.values(TYPES));
+GHOST_CORAL_UNREACTIVE.delete(TYPES.CORAL_STIMULANT);
 GHOST_CORAL_REACT.delete(TYPES.PARTICLE);
 for (const type of GHOST_CORAL_UNREACTIVE)
 	GHOST_CORAL_REACT.delete(type);
+
 
 const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR,TYPES.AIR]);
 const HEAT = new Set([TYPES.FIRE,TYPES.BLUE_FIRE,TYPES.LAVA,TYPES.POWER_LAVA,TYPES.EXOTHERMIA]);
@@ -2086,14 +2095,15 @@ const DATA = {
 	}, 0, 0.9, (x,y) => {
 		const cell = grid[x][y];
 		if(cell.acts == 0){
+			// cell.vel = Vector2.fromAngle(Random.angle()).times(Random.range(3, 5));
 			cell.vel.x = Random.bool(0.5) ? 1 : -1;
 			cell.vel.y = Random.bool(0.5) ? 1 : -1;
 			cell.acts = 1;
 		}
 
-		if(!Element.inBounds(Math.round(x + cell.vel.x), y)) cell.vel.x = -cell.vel.x;
+		if(!Element.inBounds(Math.round(x + cell.vel.x), y)) cell.vel.x *= -1;
 		
-		if(!Element.inBounds(x, Math.round(y + cell.vel.y))) cell.vel.y = -cell.vel.y;
+		if(!Element.inBounds(x, Math.round(y + cell.vel.y))) cell.vel.y *= -1;
 
 		if (Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y), BEAM_PASSTHROUGH)) Element.die(x,y);
 	}),
@@ -2327,7 +2337,7 @@ const DATA = {
 		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
 			if (Element.isType(ox, oy, TYPES.DEAD_CORAL)) Element.setCell(ox, oy, TYPES.CORAL)
 			if (Element.isType(ox, oy, TYPES.PETRIFIED_CORAL)) Element.setCell(ox, oy, TYPES.ELDER_CORAL)
-			if (Element.isType(ox, oy, TYPES.GHOST_CORAL)) Element.setCell(ox, oy, TYPES.CORPOREAL_CORAL)
+			// if (Element.isType(ox, oy, TYPES.GHOST_CORAL)) Element.setCell(ox, oy, TYPES.CORPOREAL_CORAL)
 
 		})
 		solidUpdate(x, y, undefined, undefined, (x, y, fx, fy) => {
@@ -4445,7 +4455,7 @@ let SETTINGS_SHOWN = false;
 const BRUSH_TYPES = ["Circle", "Square", "Ring", "Forceful", "Row", "Column", "Line Drawing"];
 let brushType = 0;
 let eraseOnly = false;
-let lineDrawingPoints = ([]);
+let lineDrawingPoints = [];
 let lastDrawingPoint = undefined;
 const drawingRange = 5;
 
@@ -4506,14 +4516,13 @@ function handleBrushInput() {
 						Element.setCell(x, y, brush);
 				}
 			};
-			const freezeParticle = (x,y) => {
+			const freezeParticle = (x, y) => {
 				if (Element.inBounds(x, y)) {
 					particles.filter((p, index, arr) => 
-						(Math.abs(p.position.x - x) < 1) && (Math.abs(p.position.y - y) < 1) && (Element.isEmpty(x, y)))
-						.forEach((particle, index, arr)=>{
-							particle.solidify();
-						}
-					);
+						(Math.abs(p.position.x - x) < 1) && (Math.abs(p.position.y - y) < 1) && (Element.isEmpty(x, y))
+					).forEach((particle, index, arr)=>{
+						particle.solidify();
+					});
 				}
 			}
 			const handleLine = (x, y, x1, y1, chance = 0.2, passthrough = undefined) => {
@@ -4559,24 +4568,29 @@ function handleBrushInput() {
 			else if (brushType == 3) { // Forceful
 				const CHAOS = 1;
 				const vel = 0.3;
-				for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-					if (i * i + j * j < r * r) {
-						const x = i + ox;
-						const y = j + oy;
-						if (!eraseOnly){
-							handleCell(x, y);
+				if (!eraseOnly){
+					for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+						if (i * i + j * j < r * r) {
+							const x = i + ox;
+							const y = j + oy;
+								handleCell(x, y);
+								
+								if (Element.inBounds(x, y)) createParticle(
+									new Vector2(x, y),
+									new Vector2(
+										vel * i + Random.range(-CHAOS, CHAOS),
+										vel * j + Random.range(-CHAOS, CHAOS)
+									)
+								);
 							
-							if (Element.inBounds(x, y)) createParticle(
-								new Vector2(x, y),
-								new Vector2(
-									vel * i + Random.range(-CHAOS, CHAOS),
-									vel * j + Random.range(-CHAOS, CHAOS)
-								)
-							);
-						} else{
-							freezeParticle(x,y);
 						}
 					}
+				} else{
+					particles.filter((p, index, arr) => 
+						(Vector2.dist(p.position, new Vector2(ox,oy)) < r) && (Element.isEmpty(...Vector2.floor(p.position).values))
+					).forEach((particle, index, arr)=>{
+						particle.solidify();
+					});
 				}
 			}
 			else if (brushType == 4) { // Row
@@ -4603,26 +4617,33 @@ function handleBrushInput() {
 				}
 				if(keyboard.pressed("m")){
 					console.log("click");
-					let prevValue;
-					let currentValue;
-					let values = lineDrawingPoints.values();
-					prevValue = lineDrawingPoints[0];
-					for (const value of lineDrawingPoints) {
-						currentValue = value;
-						handleLine(prevValue[0], prevValue[1], currentValue[0], currentValue[1]);
-						prevValue = currentValue;
+					for (let i = 0; i < lineDrawingPoints.length - 1; i++) {
+						handleLine(
+							...lineDrawingPoints[i].values,
+							...lineDrawingPoints[i + 1].values
+						);
 					}
+					// let prevValue;
+					// let currentValue;
+					// let values = lineDrawingPoints.values();
+					// prevValue = lineDrawingPoints[0];
+					// for (const value of lineDrawingPoints) {
+					// 	currentValue = value;
+					// 	handleLine(prevValue[0], prevValue[1], currentValue[0], currentValue[1]);
+					// 	prevValue = currentValue;
+					// }
 					lineDrawingPoints = [];
 				}
 				if(keyboard.pressed("n")){
-					if(lineDrawingPoints.length == 0 || !((Math.abs(ox-lastDrawingPoint[0]) < drawingRange) && (Math.abs(oy-lastDrawingPoint[1]) < drawingRange))){
-						lineDrawingPoints.push([ox,oy]);
-						lastDrawingPoint = [ox,oy]
+					const lastDrawingPoint = lineDrawingPoints.last;
+					if (!lineDrawingPoints.length || Vector2.dist(lastDrawingPoint, new Vector2(ox, oy)) > drawingRange){
+						lineDrawingPoints.push(new Vector2(ox, oy));
+						// lastDrawingPoint = [ox,oy]
 						// console.log(lastDrawingPoint);
 						// console.log(lineDrawingPoints);
-						console.log(ox + " | " + oy);
-						console.log(mouse.world);
-						console.log((Math.abs(ox-lastDrawingPoint[0]) < 5) + " | " + (Math.abs(oy-lastDrawingPoint[1]) < 5));
+						// console.log(ox + " | " + oy);
+						// console.log(mouse.world);
+						// console.log((Math.abs(ox-lastDrawingPoint[0]) < 5) + " | " + (Math.abs(oy-lastDrawingPoint[1]) < 5));
 					}// makeLine(oxl, oyl, oxl+10, oyl+10, TYPES.STONE, 5);
 					//apply
 					console.log("clack");
@@ -4930,16 +4951,18 @@ function displayBrushPreview() {
 				renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize);
 				renderer.stroke(...brushPreviewArgs).rect(Rect.fromMinMax(mouse.world.minus(cellBrushSize), mouse.world.plus(cellBrushSize)));
 
-				let prevValue;
-						let currentValue;
-						let values = lineDrawingPoints.values();
-						prevValue = lineDrawingPoints[0];
-						for (const value of lineDrawingPoints) {
-							currentValue = value;
-							renderer.stroke(...brushPreviewArgs).line(prevValue[0]*3, prevValue[1]*3, currentValue[0]*3, currentValue[1]*3);
-							prevValue = currentValue;
-						}
-						if(!(lineDrawingPoints.length == 0)) renderer.draw(Color.BLUE).circle(lastDrawingPoint[0] * 3, lastDrawingPoint[1] * 3, 2.5 / scene.camera.zoom);
+				// let prevValue;
+					renderer.stroke(...brushPreviewArgs).connector(lineDrawingPoints.map(point => point.times(CELL)));
+						// let currentValue;
+						// let values = lineDrawingPoints.values();
+						// prevValue = lineDrawingPoints[0];
+						// for (const value of lineDrawingPoints) {
+						// 	currentValue = value;
+						// 	renderer.stroke(...brushPreviewArgs).line(prevValue[0]* CELL, prevValue[1]* CELL, currentValue[0]* CELL, currentValue[1]* CELL);
+						// 	prevValue = currentValue;
+						// }
+					if(lineDrawingPoints.length)
+						renderer.draw(Color.BLUE).circle(lineDrawingPoints.last.times(CELL), 2.5 / scene.camera.zoom);
 				break;
 		}
 	});
