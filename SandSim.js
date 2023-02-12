@@ -40,7 +40,7 @@ const TYPES = Object.fromEntries([
 	"GLAZE_BASE", "DECUMAN_GLAZE",
 	"PRIDIUM", "GENDERFLUID",
 	"PARTICLE",
-	"EXOTHERMIA", "FIRE", "BLUE_FIRE", "BOUNCE_BEAM",
+	"EXOTHERMIA", "FIRE", "BLUE_FIRE", "SPIRAL_FIRE", "BOUNCE_BEAM",
 	"BAHHUM",
 	"ESTIUM", "ESTIUM_GAS",
 	"DDT", "ANT", "DAMSELFLY", "BEE", "HIVE", "HONEY", "SUGAR",
@@ -48,7 +48,7 @@ const TYPES = Object.fromEntries([
 	"SAND", "KELP", "KELP_TOP", "PNEUMATOCYST",
 	"WOOD", "COAL", "OIL", "FUSE", "ASH",
 	"WAX", "GRAINY_WAX", "MOLTEN_WAX",
-	"LAVA", "POWER_LAVA",
+	"LAVA", "POWER_LAVA", "GREEN_LAVA",
 	"STEAM", "SMOKE", "HYDROGEN",
 	"GLASS", "ACID",
 	"BATTERY", "ELECTRICITY","GERMANIUM", "ACTIVE_GERMANIUM", "BOID",
@@ -61,8 +61,8 @@ const TYPES = Object.fromEntries([
 	"RADIUM", "ACTINIUM", "THORIUM",
 	"LIGHTNING", "LIGHT", "LIGHT_SAD", "BOUNCY_BALL",
 	"BLOOD", "MUSCLE", "BONE", "EPIDERMIS", "INACTIVE_NEURON", "ACTIVE_NEURON", "CEREBRUM",
-	"CORAL", "DEAD_CORAL", "ELDER_CORAL", "PETRIFIED_CORAL", "GHOST_CORAL", "CORPOREAL_CORAL", "COMPRESSED_CORAL", "DEAD_COMPRESSED_CORAL", 
-	"CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER", 
+	"CORAL", "DEAD_CORAL", "ELDER_CORAL", "PETRIFIED_CORAL", "COMPRESSED_CORAL", "DEAD_COMPRESSED_CORAL", 
+	"CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER", "GHOST_CORAL", "CORPOREAL_CORAL",
 	"FLUORESCENCE", "DORMANT_FLUORESCENCE"
 ].map((n, i) => [n, i]));
 
@@ -1281,8 +1281,8 @@ const DISPERSION = 4;
 scene.physicsEngine.gravity.y = GRAVITY * CELL;
 
 const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT, TYPES.INCENSE_SMOKE]);
-const LIQUID = new Set([TYPES.WATER, TYPES.LAVA, TYPES.POWER_LAVA, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
-const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE]);
+const LIQUID = new Set([TYPES.WATER, TYPES.LAVA, TYPES.POWER_LAVA, TYPES.GREEN_LAVA, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
+const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.SPIRAL_FIRE]);
 const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, ...GAS]);
 const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL, TYPES.ESTIUM]);
 const SALT_WATER_SWAP_PASSTHROUGH = new Set([TYPES.WATER]);
@@ -1320,7 +1320,7 @@ for (const type of GHOST_CORAL_UNREACTIVE)
 	GHOST_CORAL_REACT.delete(type);
 
 
-const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR,TYPES.AIR]);
+const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR, TYPES.AIR, TYPES.BOUNCE_BEAM]);
 const HEAT = new Set([TYPES.FIRE,TYPES.BLUE_FIRE,TYPES.LAVA,TYPES.POWER_LAVA,TYPES.EXOTHERMIA]);
 const GERMANIUM_PASSTHROUGH = new Set([TYPES.GERMANIUM]);
 const BEAM_PASSTHROUGH = new Set([TYPES.BOUNCE_BEAM, TYPES.AIR, ...SOLID]);
@@ -1590,8 +1590,9 @@ const boidUpdate = (x, y, maxSpeed = 4, accuracy = 1, passthrough) => { // by va
 	}
 }
 
+let fireScale = 2;
 
-const fireUpdate = (x, y, type, up = true) => {	
+const fireUpdate = (x, y, type, up = true, down = false) => {	
 	soundEffects.fireSound.frequency++;
 	let neighbors = 0;
 	let burned = 0;
@@ -1611,10 +1612,17 @@ const fireUpdate = (x, y, type, up = true) => {
 	if ((neighbors < 6 && !burned && Random.bool(0.1)) || !oxygen)
 		Element.die(x, y);
 	else if (!burned && Random.bool(0.5)) {
-		if (up) {
-			const d = Random.bool() ? -1 : 1;
-			if (Element.tryMove(x, y, x + d, y - 1));
-			else if (Element.tryMove(x, y, x - d, y - 1));
+		if (up || down) {
+			let fy = 0;
+			if (up) fy += (down) ? (Random.bool(0.5) ? -1 : 0) : -1;
+			if (down) fy += (up) ? (Random.bool(0.5) ? 1 : 0) : 1;
+			
+			let d = Random.bool() ? -1 : 1;
+			fy *= (down && up) ? fireScale + Math.round(8/oxygen) : 1;
+			d *= (down && up) ? fireScale + Math.round(8/oxygen) : 1;
+			
+			if (Element.tryMove(x, y, x + d, y + fy));
+			else if (Element.tryMove(x, y, x - d, y + fy));
 		}
 		if (!burned) Element.die(x, y);
 	}
@@ -1913,12 +1921,21 @@ const DATA = {
 		const cell = grid[x][y];
 		Element.updateCell(x,y);
 		Element.affectAllNeighbors(x,y,(ox, oy) => {
-			if (!Element.isTypes(ox, oy, TERMINATOR_UNREACTIVE)) { //change the cell acts value here to change how long until the wire can eat
+			if(Element.isType(ox,oy,TYPES.BAHHUM)){
+				makeCircle(x,y,TYPES.ACID,10);
+			}  
+			// if (Element.isType(ox, oy, TYPES.SPIRAL_FIRE)){
+			// 	makeCircle(ox, oy, TYPES.SPIRAL_FIRE, 2, 1, TERMINATOR_UNREACTIVE);
+			// } else
+			if(Element.isType(ox, oy, TYPES.ICE)&& cell.acts<100 && Random.bool((1/cell.acts))){
+				makeCircle(x, y, TYPES.ICE,2,1,TERMINATOR_UNREACTIVE);
+			} else if (!Element.isTypes(ox, oy, TERMINATOR_UNREACTIVE)) { //change the cell acts value here to change how long until the wire can eat
 				cell.acts -=15;
 				//if ((Random.bool(Random.perlin2D(x, y, 100) / 200))) 
 				Element.setCell(ox,oy, TYPES.AIR);
 				if((Random.bool(.05))){makeCircle(x,y,TYPES.TERMINATOR,7)}
 			}
+			
 		});
 		if(cell.acts >= 250){ //this checks if A. the cell has eaten or if the cell is too old
 			Element.setCell(x,y,TYPES.AIR);
@@ -1926,10 +1943,13 @@ const DATA = {
 		cell.acts++;
 		const moveMax = 250;
 		const moveMin = 0;
+		const v = cell.vel;
 		let movement_chaos = Math.max(Math.min(Math.trunc((260)/cell.acts),moveMax),moveMin); //change this to change how much movement is varied deafult is 250
-		Element.tryMove(x,y,x-((2*Random.bool()-1)*movement_chaos),y-((2*Random.bool()-1)*movement_chaos),LIQUID_PASS_THROUGH);
+		v.x = ((2*Random.bool()-1)*movement_chaos);
+		v.y = ((2*Random.bool()-1)*movement_chaos);
+		Element.tryMove(x,y,Math.round(x+v.x),Math.round(y+v.y),LIQUID_PASS_THROUGH);
 		//to get them to be super chaotic change movement chaos to be depenent on the cell.acts value.
-	},(x,y)=>null),
+	},(x, y) => null),
 
 	[TYPES.FLASH_PAPER]: new Element(1, [new Color("#edebe1"), new Color("#f4f5df"), new Color("#cfbba3")], 0, 1, (x, y) => {
 		Element.consumeReact(x, y, TYPES.WATER, TYPES.WET_PAPER);
@@ -2032,6 +2052,56 @@ const DATA = {
 		//there is a boolean argument after this but I have no clue what it does
 	}),
 
+	// [TYPES.GREEN_FIRE]: new Element(140, [new Color("#1db55c"), new Color("#598f29"), new Color("#32a852"), new Color("#005230"), new Color("#37d622")], 0, 0, (x, y) => fireUpdate(x, y, TYPES.GREEN_FIRE, true, true)),
+
+	[TYPES.SPIRAL_FIRE]: new Element(140, [new Color("#1db55c"), new Color("#598f29"), new Color("#32a852"), new Color("#005230"), Color.MOLLY],
+	1, 0, (x, y) => {
+		const fireViolence = 4; //lower valeus == more burning
+		let burned = false;
+		let neighbors = 0;
+		let oxygen = 0;
+		cell = grid[x][y];
+		cell.vel = Vector2.fromAngle(cell.vel.angle + ((Math.sign(cell.vel.angle - Math.PI)) ? -1 : 1) * (Random.angle() / 4)).times(Random.range(1, 2));
+
+		Element.affectAllNeighbors(x, y, (X, Y)=>{
+			if (Element.isEmpty(X, Y))
+				oxygen++;
+			else {
+				if (Element.tryBurn(X, Y, TYPES.SPIRAL_FIRE))
+					burned++;
+				neighbors++;
+			}
+		})
+		if ((!burned && Random.bool(0.025)))
+			Element.die(x, y);
+		// if (burned) Element.die(x,y);
+		if (burned >= fireViolence){
+			makeCircle(x, y, TYPES.SPIRAL_FIRE, 5, 0.5);
+		}
+		cell.vel.mag = 2 * (oxygen / 6.5);
+		if (neighbors < 7)
+			Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y));
+		Element.updateCell(x,y);
+	}),
+
+	[TYPES.GREEN_LAVA]: new Element(100, [Color.LIME, Color.GREEN, Color.TOBIN], 0.7, 0, (x, y) => {
+		liquidUpdate(x, y);
+
+		Element.react(x, y - Math.floor((Math.random() * Random.range(0,3))), TYPES.AIR, TYPES.SPIRAL_FIRE, 0.005);
+		Element.reactMany(x, y, WATER_TYPES, TYPES.HYDROGEN, 0.25);
+
+		if (Random.bool(.5)) Element.react(x, y, TYPES.STONE, TYPES.SMOKE);
+		// if (Random.bool(.3)) Element.react(x, y, TYPES.GLASS, TYPES.HYDROGEN);
+		if (Random.bool(.5)) Element.react(x, y, TYPES.SUGAR, Random.bool(0.75) ? TYPES.STEAM : TYPES.GREEN_LAVA);
+
+		// Element.affectNeighbors(x, y, (ox, oy) => {
+		// 	if (Element.isType(ox, oy, TYPES.CORPOREAL_CORAL)) Random.bool(.6) ? Element.setCell(x, y, TYPES.AUREATE_DUST) : Element.setCell(x, y, TYPES.GOLD);
+		// })
+
+		lavaUpdate(x, y, TYPES.SPIRAL_FIRE);
+	}),
+
+	
 	[TYPES.EXOTHERMIA]: new Element(1, (x, y) => {
 		if (y == 0) return new Color("#b5193b");
 		else if (y == 1) return new Color("#b52619");
@@ -2104,13 +2174,12 @@ const DATA = {
 			return Color.colorScale(color, (1 - p) * 0.25 + 0.5);
 		};
 		return layer(x, y);
-	}, 0, 0.9, (x,y) => {
+	}, 0, 0.01, (x,y) => {
 		const cell = grid[x][y];
-		if(cell.acts == 0){
+		if(cell.vel.mag == 0){
 			// cell.vel = Vector2.fromAngle(Random.angle()).times(Random.range(3, 5));
 			cell.vel.x = Random.bool(0.5) ? 1 : -1;
 			cell.vel.y = Random.bool(0.5) ? 1 : -1;
-			cell.acts = 1;
 		}
 
 		if(!Element.inBounds(Math.round(x + cell.vel.x), y)) cell.vel.x *= -1;
@@ -4620,6 +4689,9 @@ function handleBrushInput() {
 						}
 					}
 				} else{
+					if(brush === TYPES.AIR){
+						return;
+					}
 					particles.filter((p, index, arr) => 
 						(Vector2.dist(p.position, new Vector2(ox,oy)) < r) && (Element.isEmpty(...Vector2.floor(p.position).values))
 					).forEach((particle, index, arr)=>{
@@ -5263,10 +5335,14 @@ intervals.continuous(time => {
 		handleBrushInput();
 		
 		const singleStep = keyboard.justPressed("Enter");
+		//just a added script, if shift and enter is pressed then the sim will just constantly run even when paused
+		const stepping = keyboard.pressed("Shift") &&  keyboard.pressed("Enter");
 
-		const simStep = !paused || singleStep;
+		const simStep = !paused || singleStep || stepping;
 		if (simStep) {
+			//cell sim step
 			stepSimulation(time);
+			//particle sim step
 			stepParticles();
 		}
 		
