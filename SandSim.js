@@ -1924,9 +1924,9 @@ const DATA = {
 			if(Element.isType(ox,oy,TYPES.BAHHUM)){
 				makeCircle(x,y,TYPES.ACID,10);
 			}  
-			// if (Element.isType(ox, oy, TYPES.SPIRAL_FIRE)){
-			// 	makeCircle(ox, oy, TYPES.SPIRAL_FIRE, 2, 1, TERMINATOR_UNREACTIVE);
-			// } else
+			if (Element.isType(ox, oy, TYPES.SPIRAL_FIRE) && Random.bool(0.35)){
+				makeCircle(ox, oy, TYPES.SPIRAL_FIRE, 2, 1, TERMINATOR_UNREACTIVE);
+			} else
 			if(Element.isType(ox, oy, TYPES.ICE)&& cell.acts<100 && Random.bool((1/cell.acts))){
 				makeCircle(x, y, TYPES.ICE,2,1,TERMINATOR_UNREACTIVE);
 			} else if (!Element.isTypes(ox, oy, TERMINATOR_UNREACTIVE)) { //change the cell acts value here to change how long until the wire can eat
@@ -2091,7 +2091,7 @@ const DATA = {
 		Element.reactMany(x, y, WATER_TYPES, TYPES.HYDROGEN, 0.25);
 
 		if (Random.bool(.5)) Element.react(x, y, TYPES.STONE, TYPES.SMOKE);
-		// if (Random.bool(.3)) Element.react(x, y, TYPES.GLASS, TYPES.HYDROGEN);
+		if (Random.bool(.3)) Element.react(x, y, TYPES.GLASS, TYPES.HYDROGEN);
 		if (Random.bool(.5)) Element.react(x, y, TYPES.SUGAR, Random.bool(0.75) ? TYPES.STEAM : TYPES.GREEN_LAVA);
 
 		// Element.affectNeighbors(x, y, (ox, oy) => {
