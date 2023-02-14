@@ -41,7 +41,7 @@ const TYPES = Object.fromEntries([
 	"PRIDIUM", "GENDERFLUID",
 	"PARTICLE",
 	"EXOTHERMIA", "FIRE", "BLUE_FIRE", "SPIRAL_FIRE", "BOUNCE_BEAM",
-	"BAHHUM",
+	"BAHHUM", "GREEK_FIRE",
 	"ESTIUM", "ESTIUM_GAS",
 	"DDT", "ANT", "DAMSELFLY", "BEE", "HIVE", "HONEY", "SUGAR",
 	"WATER", "ICE", "SNOW", "STAINED_SNOW", "SALT", "SALT_WATER",
@@ -2062,8 +2062,9 @@ const DATA = {
 		let burned = false;
 		let neighbors = 0;
 		let oxygen = 0;
+		let intensity = 0.9;
 		cell = grid[x][y];
-		cell.vel = Vector2.fromAngle(cell.vel.angle + ((Math.sign(cell.vel.angle - Math.PI)) ? -1 : 1) * (Random.angle() / 4)).times(Random.range(1, 2));
+		cell.vel = Vector2.fromAngle(cell.vel.angle + ((Math.sign(cell.vel.angle - Math.PI)) ? -intensity : intensity) * (Random.angle() / 4)).times(Random.range(1, 2));
 		
 		Element.consumeReact(x, y, TYPES.ACTIVE_NEURON, TYPES.SPIRAL_FIRE);
 		Element.consumeReact(x, y, TYPES.FIRE, TYPES.SPIRAL_FIRE);
@@ -2086,17 +2087,48 @@ const DATA = {
 				neighbors++;
 			}
 		})
-		if ((!burned && Random.bool(0.025)))
+		if ((!burned && Random.bool(0.015)))
 			Element.die(x, y);
 		// if (burned) Element.die(x,y);
-		if (burned >= fireViolence){
-			makeCircle(x, y, TYPES.SPIRAL_FIRE, 5, 0.5);
-		}
-		cell.vel.mag = 2 * (oxygen / 6.5);
+		// if (burned >= fireViolence){
+		// 	// makeCircle(x, y, TYPES.SPIRAL_FIRE, 5, 0.5);
+		// }
+		cell.vel.mag = 2 * (oxygen / 4.5);
+		// cell.vel.mag = Math.max(Math.min(cell.vel.mag, 0), 5);
 		if (neighbors < 7)
 			Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y));
 		Element.updateCell(x,y);
 	}),
+
+	[TYPES.GREEK_FIRE]: new Element(140, [new Color("#1db55c"), new Color("#598f29"), new Color("#32a852"), new Color("#005230"), Color.MOLLY],
+	1, 0, (x, y) => {
+        const fireViolence = 4; //lower valeus == more burning
+        let burned = false;
+        let neighbors = 0;
+        let oxygen = 0;
+        cell = grid[x][y];
+        cell.vel = Vector2.fromAngle(cell.vel.angle + ((Math.sign(cell.vel.angle - Math.PI)) ? -1 : 1) * (Random.angle() / 4)).times(Random.range(1, 2));
+
+        Element.affectAllNeighbors(x, y, (X, Y)=>{
+            if (Element.isEmpty(X, Y))
+                oxygen++;
+            else {
+                if (Element.tryBurn(X, Y, TYPES.SPIRAL_FIRE))
+                    burned++;
+                neighbors++;
+            }
+        })
+        if ((!burned && Random.bool(0.025)))
+            Element.die(x, y);
+        // if (burned) Element.die(x,y);
+        if (burned >= fireViolence){
+            makeCircle(x, y, TYPES.SPIRAL_FIRE, 5, 0.5);
+        }
+        cell.vel.mag = 2 * (oxygen / 6.5);
+        if (neighbors < 7)
+            Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y));
+        Element.updateCell(x,y);
+    }),
 
 	[TYPES.GREEN_LAVA]: new Element(100, [Color.LIME, Color.GREEN, Color.TOBIN], 0.7, 0, (x, y) => {
 		liquidUpdate(x, y);
