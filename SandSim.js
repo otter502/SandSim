@@ -41,7 +41,7 @@ const TYPES = Object.fromEntries([
 	"PRIDIUM", "GENDERFLUID",
 	"PARTICLE",
 	"EXOTHERMIA", "FIRE", "BLUE_FIRE", "SPIRAL_FIRE", "BOUNCE_BEAM",
-	"BAHHUM", "GREEK_FIRE",
+	"BAHHUM", //"GREEK_FIRE",
 	"ESTIUM", "ESTIUM_GAS",
 	"DDT", "ANT", "DAMSELFLY", "BEE", "HIVE", "HONEY", "SUGAR",
 	"WATER", "ICE", "SNOW", "STAINED_SNOW", "SALT", "SALT_WATER",
@@ -1958,7 +1958,7 @@ const DATA = {
 		let movement_chaos = Math.max(Math.min(Math.trunc((260)/cell.acts),moveMax),moveMin); //change this to change how much movement is varied deafult is 250
 		v.x = ((2*Random.bool()-1)*movement_chaos);
 		v.y = ((2*Random.bool()-1)*movement_chaos);
-		Element.tryMove(x,y,Math.round(x+v.x),Math.round(y+v.y),LIQUID_PASS_THROUGH);
+		Element.tryMove(x,y,Math.round(x+v.x),Math.round(y+v.y), LIQUID_PASSTHROUGH);
 		//to get them to be super chaotic change movement chaos to be depenent on the cell.acts value.
 	},(x, y) => null),
 
@@ -2047,13 +2047,13 @@ const DATA = {
 	[TYPES.BOID]: new Element(1, (x, y) => {
 		return Color.alpha(new Color("#b3fff7"),0);
 	}, 0, 0.1, (x,y)=>{
-		if (Element.isTypes(x,y+1,SOLID_PASS_THROUGH)) {
+		if (Element.isTypes(x,y+1,SOLID_PASSTHROUGH)) {
 		const v = grid[x][y].vel;
 			//FIXME after addign this the website loads inconsistently
 			v.y = (v.y > 10) ? v.y+1 : v.y+1; //FIXME there seems to be a weird error where if you just have v.y += 1; v.x += 1; it will crash inconsistentally
 			
 			// v.x += Random.bool(0.6) ? 0.5 : -1;
-			Element.tryMove(x, y, Math.round(x + v.x), Math.round(y + v.y), SOLID_PASS_THROUGH);
+			Element.tryMove(x, y, Math.round(x + v.x), Math.round(y + v.y), SOLID_PASSTHROUGH);
 			console.log(v);
 		}
 		
@@ -2109,35 +2109,35 @@ const DATA = {
 		Element.updateCell(x,y);
 	}),
 
-	[TYPES.GREEK_FIRE]: new Element(140, [new Color("#1db55c"), new Color("#598f29"), new Color("#32a852"), new Color("#005230"), Color.MOLLY],
-	1, 0, (x, y) => {
-        const fireViolence = 4; //lower valeus == more burning
-        let burned = false;
-        let neighbors = 0;
-        let oxygen = 0;
-        cell = grid[x][y];
-        cell.vel = Vector2.fromAngle(cell.vel.angle + ((Math.sign(cell.vel.angle - Math.PI)) ? -1 : 1) * (Random.angle() / 4)).times(Random.range(1, 2));
+	// [TYPES.GREEK_FIRE]: new Element(140, [new Color("#1db55c"), new Color("#598f29"), new Color("#32a852"), new Color("#005230"), Color.MOLLY],
+	// 1, 0, (x, y) => {
+    //     const fireViolence = 4; //lower valeus == more burning
+    //     let burned = false;
+    //     let neighbors = 0;
+    //     let oxygen = 0;
+    //     cell = grid[x][y];
+    //     cell.vel = Vector2.fromAngle(cell.vel.angle + ((Math.sign(cell.vel.angle - Math.PI)) ? -1 : 1) * (Random.angle() / 4)).times(Random.range(1, 2));
 
-        Element.affectAllNeighbors(x, y, (X, Y)=>{
-            if (Element.isEmpty(X, Y))
-                oxygen++;
-            else {
-                if (Element.tryBurn(X, Y, TYPES.SPIRAL_FIRE))
-                    burned++;
-                neighbors++;
-            }
-        })
-        if ((!burned && Random.bool(0.025)))
-            Element.die(x, y);
-        // if (burned) Element.die(x,y);
-        if (burned >= fireViolence){
-            makeCircle(x, y, TYPES.SPIRAL_FIRE, 5, 0.5);
-        }
-        cell.vel.mag = 2 * (oxygen / 6.5);
-        if (neighbors < 7)
-            Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y));
-        Element.updateCell(x,y);
-    }),
+    //     Element.affectAllNeighbors(x, y, (X, Y)=>{
+    //         if (Element.isEmpty(X, Y))
+    //             oxygen++;
+    //         else {
+    //             if (Element.tryBurn(X, Y, TYPES.SPIRAL_FIRE))
+    //                 burned++;
+    //             neighbors++;
+    //         }
+    //     })
+    //     if ((!burned && Random.bool(0.025)))
+    //         Element.die(x, y);
+    //     // if (burned) Element.die(x,y);
+    //     if (burned >= fireViolence){
+    //         makeCircle(x, y, TYPES.SPIRAL_FIRE, 5, 0.5);
+    //     }
+    //     cell.vel.mag = 2 * (oxygen / 6.5);
+    //     if (neighbors < 7)
+    //         Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y));
+    //     Element.updateCell(x,y);
+    // }),
 
 	[TYPES.GREEN_LAVA]: new Element(100, [Color.LIME, Color.GREEN, Color.TOBIN], 0.7, 0, (x, y) => {
 		liquidUpdate(x, y);
@@ -2202,15 +2202,15 @@ const DATA = {
 			cellV.x += (Random.bool(0.5)) ? -1 : 1;
 		}
 		cellV.mag = Number.clamp(cellV.mag, 0, 5);
-		if (Element.isEmpty(Math.round(x + cellV.x), y, LIQUID_PASS_THROUGH)){
+		if (Element.isEmpty(Math.round(x + cellV.x), y, LIQUID_PASSTHROUGH)){
 			cellV.x = -cellV.x;
 		}
-		if (Element.isEmpty(x, Math.round(y + cellV.y + GRAVITY), LIQUID_PASS_THROUGH)){
+		if (Element.isEmpty(x, Math.round(y + cellV.y + GRAVITY), LIQUID_PASSTHROUGH)){
 			cellV.y = -cellV.y;
 		}
 		cellV.y += 3*GRAVITY;
 
-		Element.tryMove(x, y, Math.round(x + cellV.x), Math.round(y + cellV.y), LIQUID_PASS_THROUGH);
+		Element.tryMove(x, y, Math.round(x + cellV.x), Math.round(y + cellV.y), LIQUID_PASSTHROUGH);
 		Element.updateCell(x,y);
 	}, (x, y)=>{
 		if (Random.bool(0.99)) Element.trySetCell(x, y, TYPES.SMOKE);
