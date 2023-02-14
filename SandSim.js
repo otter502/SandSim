@@ -59,6 +59,7 @@ const TYPES = Object.fromEntries([
 	"IRON", "LIQUID_IRON", "RUST",
 	"MERCURY", "TERMINATOR",
 	"RADIUM", "ACTINIUM", "THORIUM",
+	"ANTIMATTER",
 	"LIGHTNING", "LIGHT", "LIGHT_SAD", "BOUNCY_BALL",
 	"BLOOD", "MUSCLE", "BONE", "EPIDERMIS", "INACTIVE_NEURON", "ACTIVE_NEURON", "CEREBRUM",
 	"CORAL", "DEAD_CORAL", "ELDER_CORAL", "PETRIFIED_CORAL", "COMPRESSED_CORAL", "DEAD_COMPRESSED_CORAL", 
@@ -248,7 +249,7 @@ class Cell {
 	constructor(id) {
 		this.id = id;
 		this.updated = false;
-		this.vel = new Vector2(0, 0);
+		this.vel = Vector2.origin;
 		// delete this.vel.x;
 		// delete this.vel.y;
 		// let _x = 0, _y = 0;
@@ -307,6 +308,8 @@ class DYNAMIC_OBJECT extends ElementScript {
 		this.slot = (DYNAMIC_OBJECT.nextSlot++) % DYNAMIC_OBJECT.DISTRIBUTION;
 		this.collidingObjects = new Map();
 		this.worryCells = new Set();
+		this.lastVelocity = Vector2.origin;
+		this.lastAngularVelocity = 0;
 	}
 	static computeCenterOfMass(grid) {
 		const centerOfMass = Vector2.origin;
@@ -320,18 +323,40 @@ class DYNAMIC_OBJECT extends ElementScript {
 		}
 		return centerOfMass.mul(CELL / total);
 	}
-	collideGeneral(obj, { element }) {
-		if (!this.collidingObjects.has(element)) {
-			this.collidingObjects.set(element);
-			
-			const momentum = obj.scripts.PHYSICS.mass + element.scripts.PHYSICS.mass;
-			synth.play({
-				duration: 10,
-				frequency: Random.range(600, 800),
-				volume: momentum / (width * height / 16),
-				wave: "sine",
-				fadeOut: 100
-			});
+	collideGeneral(obj, { element, contacts, direction }) {
+		if (!this.collidingObjects.get(element)) {
+			this.collidingObjects.set(element, 20);
+
+			const mass = element => element.scripts.PHYSICS.mobile ? element.scripts.PHYSICS.mass : 0;
+			const contactVelocity = (element, contact) => {
+				if (!element.scripts.DYNAMIC_OBJECT) return 0;
+				const { lastVelocity, lastAngularVelocity } = element.scripts.DYNAMIC_OBJECT;	
+				return lastVelocity.plus(contact.minus(element.transform.position).normal.times(lastAngularVelocity)).dot(direction);
+			};
+			const m0 = mass(obj);
+			const m1 = mass(element);
+			const systemMass = m0 + m1;
+			let momentum = 0;
+			for (let i = 0; i < contacts.length; i++) {
+				const contact = contacts[i];
+				momentum += Math.abs(m0 * contactVelocity(obj, contact) - m1 * contactVelocity(element, contact));
+			}
+
+			// frequency scales with sqrt(mass)
+			// volume scales with momentum
+
+			// const frequency = 40 / (0.01 * Math.sqrt(systemMass));
+			// const volume = momentum * 0.0005;
+
+			// console.log(frequency, volume);
+
+			// if (volume > 1e-1) synth.play({
+			// 	duration: 10,
+			// 	frequency,
+			// 	volume,
+			// 	wave: "sine",
+			// 	fadeOut: 10
+			// });
 		}
 	}
 	setGrid(obj, grid, gridOffset) {
@@ -387,12 +412,12 @@ class DYNAMIC_OBJECT extends ElementScript {
 			.getModel(obj.transform)
 			.scaleAbout(Vector2.origin, 1 / CELL);
 		const bounds = gridBounds.getBoundingBox();
-		const globalMin = new Vector2(0, 0);
+		const globalMin = Vector2.origin;
 		const globalMax = new Vector2(WIDTH - 1, HEIGHT - 1);
 		const min = Vector2.clamp(Vector2.floor(bounds.min), globalMin, globalMax);
 		const max = Vector2.clamp(Vector2.ceil(bounds.max), globalMin, globalMax);
-		const c = new Vector2(0, 0);
-		const local = new Vector2(0, 0);
+		const c = Vector2.origin;
+		const local = Vector2.origin;
 		const toLocal = Matrix3.mulMatrices([
 			Matrix3.scale(1 / CELL),
 			Matrix3.translation(this.centerOfMass),
@@ -437,13 +462,13 @@ class DYNAMIC_OBJECT extends ElementScript {
 			toLocal.inverse,
 			Matrix3.scale(SKIP)
 		]);
-		const skip = new Vector2(0, 0);
-		const vertex = new Vector2(0, 0);
+		const skip = Vector2.origin;
+		const vertex = Vector2.origin;
 
 		for (c.x = min.x; c.x <= max.x; c.x++) {
 			if (c.x > topCutoff) top = topEdgeRight;
 			if (c.x > bottomCutoff) bottom = bottomEdgeRight;
-			const minY = Math.max(Math.ceil(top.evaluate(c.x)), min.y);
+			const minY = Math.max(Math.floor(top.evaluate(c.x)), min.y);
 			const maxY = Math.min(Math.ceil(bottom.evaluate(c.x)) - 1, max.y);
 			c.y = minY;
 			toLocal.times(c, local);
@@ -465,34 +490,6 @@ class DYNAMIC_OBJECT extends ElementScript {
 				}
 			}
 		}
-
-		// const iCell = 1 / CELL;
-		// const bounds = this.gridBounds
-		// 	.getModel(obj.transform)
-		// 	.scaleAbout(Vector2.origin, iCell)
-		// 	.getBoundingBox();
-		// const boundsMin = new Vector2(0, 0);
-		// const boundsMax = new Vector2(WIDTH - 1, HEIGHT - 1);
-		// const min = Vector2.clamp(Vector2.floor(bounds.min), boundsMin, boundsMax);
-		// const max = Vector2.clamp(Vector2.ceil(bounds.max), boundsMin, boundsMax);
-		// const toLocal = Matrix3.mulMatrices([
-		// 	Matrix3.translation(this.centerOfMass.x * iCell, this.centerOfMass.y * iCell),
-		// 	Matrix3.scale(iCell, iCell),
-		// 	obj.transform.inverse,
-		// 	Matrix3.scale(CELL, CELL)
-		// ]);
-		// const c = new Vector2(0, 0);
-		// const local = new Vector2(0, 0);
-		// for (c.x = min.x; c.x <= max.x; c.x++) {
-		// 	for (c.y = min.y; c.y <= max.y; c.y++) {
-		// 		toLocal.times(c, local);
-		// 		let { x, y } = local;
-		// 		if (x >= 0 && y >= 0 && x < this.width && y < this.height) {
-		// 			const cell = this.grid[~~x][~~y];
-		// 			if (cell.id) fn(cell, c.x, c.y);
-		// 		}
-		// 	}
-		// }
 	}
 	removeIfNecessary(obj) {
 		if ((obj.defaultShape && !obj.getBoundingBox().intersect(new Rect(0, 0, width, height))) || isNaN(obj.transform.position)) {
@@ -519,10 +516,6 @@ class DYNAMIC_OBJECT extends ElementScript {
 		this.forEachCell((cell, x, y) => {
 			if (grid[x][y].sameType(cell)) {
 				Element.die(x, y);
-				if (!this.colors.has(cell)) {
-					throw new Error("other one");
-					return;
-				}
 				tex.shaderSetPixel(x, y, this.colors.get(cell));
 			} else cell.id = TYPES.AIR;
 		});
@@ -651,9 +644,12 @@ class DYNAMIC_OBJECT extends ElementScript {
 	}
 	update(obj) {
 		const { rb } = this;
-		rb.mobile = !paused;
-		for (const [key, count] of this.collidingObjects)
-			this.collidingObjects.set(key, count - 1);
+		rb.mobile = !paused || keyboard.justPressed("Enter");
+		this.lastVelocity = rb.velocity.get();
+		this.lastAngularVelocity = rb.angularVelocity;
+		for (const [key, count] of this.collidingObjects) {
+			this.collidingObjects.set(key, Math.max(0, count - 1));
+		}
 	}
 	draw(obj, name, shape) {
 		if (keyboard.pressed("c")) {
@@ -781,7 +777,7 @@ const lastIds = Array.dim(WIDTH, HEIGHT)
 
 
 class Element {
-	static DEFAULT_PASS_THROUGH = new Set([TYPES.AIR]);
+	static DEFAULT_PASSTHROUGH = new Set([TYPES.AIR]);
 	constructor(alpha, color, resistance = 0, flammability = 0, update = () => null, onburn = () => null, reference = false) {
 		
 		if (typeof resistance === "function")
@@ -1132,12 +1128,12 @@ class Element {
 		Element.setCell(x, y, TYPES.AIR);
 	}
 
-	static isEmptyReference(x, y, set = Element.DEFAULT_PASS_THROUGH) {
+	static isEmptyReference(x, y, set = Element.DEFAULT_PASSTHROUGH) {
 		return Element.inBounds(x, y) && set.has(grid[x][y].id);
 	}
 
 
-	static isEmpty(x, y, set = Element.DEFAULT_PASS_THROUGH) {
+	static isEmpty(x, y, set = Element.DEFAULT_PASSTHROUGH) {
 		if (Element.inBounds(x, y)) {
 			let id = grid[x][y].id;
 			if (DATA[id].reference) {
@@ -1282,19 +1278,19 @@ scene.physicsEngine.gravity.y = GRAVITY * CELL;
 
 const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT, TYPES.INCENSE_SMOKE]);
 const LIQUID = new Set([TYPES.WATER, TYPES.LAVA, TYPES.POWER_LAVA, TYPES.GREEN_LAVA, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
-const GAS_PASS_THROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.SPIRAL_FIRE]);
-const LIQUID_PASS_THROUGH = new Set([...GAS_PASS_THROUGH, ...GAS]);
-const WATER_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.OIL, TYPES.ESTIUM]);
+const GAS_PASSTHROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.SPIRAL_FIRE]);
+const LIQUID_PASSTHROUGH = new Set([...GAS_PASSTHROUGH, ...GAS]);
+const WATER_PASSTHROUGH = new Set([...LIQUID_PASSTHROUGH, TYPES.OIL, TYPES.ESTIUM]);
 const SALT_WATER_SWAP_PASSTHROUGH = new Set([TYPES.WATER]);
-const SOLID_PASS_THROUGH = new Set([...LIQUID_PASS_THROUGH, ...LIQUID]);
+const SOLID_PASSTHROUGH = new Set([...LIQUID_PASSTHROUGH, ...LIQUID]);
 const SOLID = new Set(Object.values(TYPES));
 SOLID.delete(TYPES.PARTICLE);
-for (const type of SOLID_PASS_THROUGH)
+for (const type of SOLID_PASSTHROUGH)
 	SOLID.delete(type);
-const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASS_THROUGH, TYPES.PARTICLE]);
+const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASSTHROUGH, TYPES.PARTICLE]);
 const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER]);
-const GLAZE_TYPES = new Set([TYPES.GLAZE_BASE, TYPES.DECUMAN_GLAZE])
+const GLAZE_TYPES = new Set([TYPES.GLAZE_BASE, TYPES.DECUMAN_GLAZE]);
 const ANT_UNSTICKABLE = new Set([TYPES.GENDERFLUID, TYPES.COPPER, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.IRON, TYPES.LIQUID_IRON, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.MUSCLE, ...WATER_TYPES]);
 const CONDUCTIVE = new Set([TYPES.COPPER_BRICKS, TYPES.GENDERFLUID, TYPES.LIGHT_SAD, TYPES.COPPER, TYPES.GOLD, TYPES.AUREATE_DUST, TYPES.LIQUID_GOLD, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.IRON, TYPES.MUSCLE, ...WATER_TYPES]);
 const ELECTRICITY_PASSTHROUGH = new Set([...CONDUCTIVE,TYPES.GERMANIUM, TYPES.ELECTRICITY]);
@@ -1304,13 +1300,14 @@ const SOIL_TYPES = new Set([TYPES.DAMP_SOIL, TYPES.SOIL]);
 const GRASS_ROOTABLE = new Set([...SOIL_TYPES, ...WATER_TYPES]);
 const CONVEYOR_RESISTANT = new Set([TYPES.CONVEYOR_LEFT, TYPES.CONVEYOR_RIGHT, TYPES.CONDENSED_STONE]);
 const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM, TYPES.ACTINIUM, TYPES.THORIUM, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
-const NEURON = new Set([TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON])
-const BRAIN = new Set([...NEURON, TYPES.CEREBRUM])
-const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD, TYPES.BONE])
+const NEURON = new Set([TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON]);
+const BRAIN = new Set([...NEURON, TYPES.CEREBRUM]);
+const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD, TYPES.BONE]);
 const THICKETS = new Set([TYPES.THICKET, TYPES.INCENSE, TYPES.THICKET_BUD, TYPES.THICKET_SEED, TYPES.INCENSE_SMOKE, TYPES.THICKET_STEM]);
 const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS, TYPES.GHOST_CORAL]);
-const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL, TYPES.CORPOREAL_CORAL, TYPES.COMPRESSED_CORAL])
-const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL, TYPES.GHOST_CORAL, TYPES.DEAD_COMPRESSED_CORAL])
+const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL, TYPES.CORPOREAL_CORAL, TYPES.COMPRESSED_CORAL]);
+const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL, TYPES.GHOST_CORAL, TYPES.DEAD_COMPRESSED_CORAL]);
+const ANTIMATTER_PASSTHROUGH = new Set([TYPES.AIR, TYPES.ANTIMATTER]);
 const CORALS = new Set([...CORAL_OFF, ...CORAL_ON, TYPES.CORAL_CONSUMER, TYPES.CORAL_PRODUCER, TYPES.CORAL_STIMULANT]);
 const GHOST_CORAL_UNREACTIVE = new Set([...CORALS, TYPES.GLASS, ...CONVEYOR_RESISTANT, TYPES.AIR]);
 const GHOST_CORAL_REACT = new Set(Object.values(TYPES));
@@ -1472,9 +1469,11 @@ const fluidUpdate = (x, y, direction, accel, passthrough) => {
 
 	let fell = false;
 	let horiz = false;
+	let moved = false;
 
 	if (Element.tryMove(x, y, x, y + dy, passthrough)) {
 		fell = true;
+		moved = true;
 	} else {
 		if (vel.y > 5) {
 			vel.rotate(Random.angle()).div(2);
@@ -1491,9 +1490,12 @@ const fluidUpdate = (x, y, direction, accel, passthrough) => {
 			if (Element.tryMove(x, y, x + d, y + dy, passthrough)) {
 				fell = true;
 				horiz = true;
+				moved = true;
 			} else {
-				if (Element.tryMove(x, y, x + d, y, passthrough)) horiz = true;
-				else {
+				if (Element.tryMove(x, y, x + d, y, passthrough)) {
+					horiz = true;
+					moved = true;
+				} else {
 					vel.mul(0);
 					continue;
 				}
@@ -1506,14 +1508,19 @@ const fluidUpdate = (x, y, direction, accel, passthrough) => {
 		vel.x *= 0.8;
 		if (horiz) vel.y *= 0.8;
 	} else vel.y = 0;
+
+	return moved;
 };
 
 function chaosUpdate(x, y, passthrough) {
 	const angle = Random.angle();
 	const cos = Math.cos(angle);
 	const sin = Math.sin(angle);
-	if (!Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin), passthrough))
+	if (!Element.tryMove(x, y, Math.round(x + cos), Math.round(y + sin), passthrough)) {
 		Element.updateCell(x, y);
+		return false;
+	}
+	return true;
 }
 
 const boidUpdate = (x, y, maxSpeed = 4, accuracy = 1, passthrough) => { // by val (mostly)
@@ -1534,9 +1541,9 @@ const boidUpdate = (x, y, maxSpeed = 4, accuracy = 1, passthrough) => { // by va
 
 
 	//rules
-	let cohesionV = new Vector2(0, 0); //cohesion
-	let separationV = new Vector2(0, 0); //seperation
-	let alignmentV = new Vector2(0, 0);	//alignment
+	let cohesionV = Vector2.origin; //cohesion
+	let separationV = Vector2.origin; //seperation
+	let alignmentV = Vector2.origin;	//alignment
 	cell.vel.rotate(Random.range(-jitterRange, jitterRange));
 	cell.vel.mag += Random.range(-jitterRange, jitterRange);
 	let boundingV = new Vector2(0,0); //bounding
@@ -1638,12 +1645,14 @@ const lavaUpdate = (x, y, type) => {
 	});
 };
 
-const liquidUpdate = (x, y) => {
-	fluidUpdate(x, y, 1, GRAVITY, LIQUID_PASS_THROUGH);
+const liquidUpdate = (x, y, sound = soundEffects.liquidSound, passthrough = LIQUID_PASSTHROUGH) => {
+	if (fluidUpdate(x, y, 1, GRAVITY, passthrough)) {
+		sound.frequency++;
+	}
 };
 
-const gasUpdate = (x, y) => {
-	fluidUpdate(x, y, -1, 0, GAS_PASS_THROUGH);
+const gasUpdate = (x, y, passthrough = GAS_PASSTHROUGH) => {
+	fluidUpdate(x, y, -1, 0, passthrough);
 };
 
 const solidUpdate = (x, y, g = GRAVITY, dxShiftChance = 0, tryMove = Element.tryMove) => {
@@ -1651,11 +1660,11 @@ const solidUpdate = (x, y, g = GRAVITY, dxShiftChance = 0, tryMove = Element.try
 	vel.y += g;
 	const dx = Random.bool(dxShiftChance) ? (Random.bool(.5) ? -1 : 1) : 0;
 	const dy = 1 + Math.round(vel.y);
-	if (tryMove(x, y, x + dx, y + dy, SOLID_PASS_THROUGH));
+	if (tryMove(x, y, x + dx, y + dy, SOLID_PASSTHROUGH));
 	else {
 		const d = Random.bool() ? -1 : 1;
-		if (tryMove(x, y, x - d, y + dy, SOLID_PASS_THROUGH));
-		else if (tryMove(x, y, x + d, y + dy, SOLID_PASS_THROUGH));
+		if (tryMove(x, y, x - d, y + dy, SOLID_PASSTHROUGH));
+		else if (tryMove(x, y, x + d, y + dy, SOLID_PASSTHROUGH));
 		else{
 			if (vel.y > 4) {
 				vel.rotate(Random.angle()).div(5);
@@ -1713,7 +1722,7 @@ function weedBranch(x1, y1, x2, y2, id){
 }
 
 
-const EXPLOSION_PASSTHROUGH = new Set([...LIQUID_PASS_THROUGH, TYPES.LIGHTNING, TYPES.AIR]);
+const EXPLOSION_PASSTHROUGH = new Set([...LIQUID_PASSTHROUGH, TYPES.LIGHTNING, TYPES.AIR]);
 EXPLOSION_PASSTHROUGH.delete(TYPES.BLUE_FIRE);
 EXPLOSION_PASSTHROUGH.delete(TYPES.FIRE);
 
@@ -1794,12 +1803,12 @@ const DATA = {
 
 	}, 0, 0, (x, y) => {
 		const v = grid[x][y].vel;
-		if (Element.threeChecks(x, y + 1, SOLID_PASS_THROUGH)) {
+		if (Element.threeChecks(x, y + 1, SOLID_PASSTHROUGH)) {
 			const c = Random.range(0, Math.PI);
 			v.x = Math.cos(c);
 			v.y = Math.sin(c);
 		}
-		Element.tryMove(x, y, Math.round(x + v.x), Math.round(y + v.y), SOLID_PASS_THROUGH)
+		Element.tryMove(x, y, Math.round(x + v.x), Math.round(y + v.y), SOLID_PASSTHROUGH)
 	}),
 	
 	//first test element, after element: (acts, color script, unknown, burning speed, interval script, burning script)
@@ -2167,7 +2176,7 @@ const DATA = {
 		["#5c0404", 15],
 		["#590404", 12]
 	]), 0.4, 0.01, (x, y) => {
-		fluidUpdate(x, y, 1, GRAVITY, WATER_PASS_THROUGH);
+		liquidUpdate(x, y, soundEffects.liquidUpdate, WATER_PASSTHROUGH);
 	}, (x, y) => {
 		Element.setCell(x, y, Random.bool(.05) ? TYPES.ASH : Random.bool(.05) ? TYPES.STEAM : TYPES.SMOKE);
 		if (Random.bool(.25)) Element.trySetCell(x, y - 1, TYPES.RUST);
@@ -2534,8 +2543,8 @@ const DATA = {
 		["#8a8d8a", 7],
 	]), 0.01, 0, (x, y) => {
 		solidUpdate(x, y, 0, .8)
-		/*if(Element.isTypes(x, y + 1, LIQUID_PASS_THROUGH)) */
-		//else if(Element.isTypes(x, y + 1, SOLID_PASS_THROUGH) && Random.bool(.7)) Element.tryMove(x, y, x + (Random.bool(.5) ? -1 : 1), y);
+		/*if(Element.isTypes(x, y + 1, LIQUID_PASSTHROUGH)) */
+		//else if(Element.isTypes(x, y + 1, SOLID_PASSTHROUGH) && Random.bool(.7)) Element.tryMove(x, y, x + (Random.bool(.5) ? -1 : 1), y);
 
 	}),
 
@@ -2987,6 +2996,7 @@ const DATA = {
 		{ // rain
 			if (Random.bool(0.0004)) {
 				Element.setCell(x, y, TYPES.WATER);
+				soundEffects.rainSound.frequency++;
 				return;
 			}
 		};
@@ -3002,6 +3012,10 @@ const DATA = {
 			if (Random.bool(CLOUD_STRICTNESS)) grid[x][y].acts--;
 			if (grid[x][y].acts > LIGHTNING_DELAY && Random.bool(0.000001)) {
 				Element.setCell(x, y, TYPES.LIGHTNING);
+
+				intervals.delay(() => {
+					eventSoundEffects.thunderSound.frequency++;
+				}, ~~Random.range(60, 100));
 				return;
 			}
 		};
@@ -3081,7 +3095,7 @@ const DATA = {
 	[TYPES.LIQUID_COPPER]: new Element(20, [new Color("#a35a33"), new Color("#915129")], .65, 0, (x, y) => {
 
 		if (!Element.consumeReactMany(x, y, COLD, TYPES.COPPER))
-			liquidUpdate(x, y);
+			liquidUpdate(x, y, soundEffects.lavaSound);
 
 		lavaUpdate(x, y, TYPES.FIRE);
 	}),
@@ -3112,7 +3126,7 @@ const DATA = {
 
 	[TYPES.LIQUID_LEAD]: new Element(50, [new Color("#453e4d"), new Color("#3e3647")], 0.6, 0, (x, y) => {
 		if (!Element.consumeReactMany(x, y, COLD, TYPES.LEAD))
-			liquidUpdate(x, y);
+			liquidUpdate(x, y, soundEffects.lavaSound);
 		lavaUpdate(x, y, TYPES.FIRE);
 	}),
 
@@ -3153,7 +3167,7 @@ const DATA = {
 		else return new Color("#edc9672d");
 	}, 0.55, 0, (x, y) => {
 		if (!Element.consumeReactMany(x, y, COLD, TYPES.GOLD))
-			liquidUpdate(x, y);
+			liquidUpdate(x, y, soundEffects.lavaSound);
 		lavaUpdate(x, y, TYPES.FIRE);
 	}),
 
@@ -3183,7 +3197,7 @@ const DATA = {
 
 	[TYPES.LIQUID_IRON]: new Element(30, [new Color("#cc5546"), new Color("#dd4536")], 0.8, 0, (x, y) => {
 		if (!Element.consumeReactMany(x, y, COLD, TYPES.IRON))
-			liquidUpdate(x, y);
+			liquidUpdate(x, y, soundEffects.lavaSound);
 		lavaUpdate(x, y, TYPES.FIRE);
 	}),
 
@@ -3540,7 +3554,7 @@ const DATA = {
 		}
 	}),
 	[TYPES.WATER]: new Element(0, [new Color("#120a59"), new Color("#140960")], 0.4, 0.05, (x, y) => {
-		fluidUpdate(x, y, 1, GRAVITY, WATER_PASS_THROUGH);
+		liquidUpdate(x, y, soundEffects.liquidSound, WATER_PASSTHROUGH);
 	}, (x, y) => {
 		Element.setCell(x, y, TYPES.STEAM);
 		return true;
@@ -3549,7 +3563,7 @@ const DATA = {
 		["#06253d", 30],
 		["#042438", 30]
 	]), 0.42, 0.05, (x, y) => {
-		fluidUpdate(x, y, 1, GRAVITY, WATER_PASS_THROUGH);
+		liquidUpdate(x, y, soundEffects.liquidSound, WATER_PASSTHROUGH);
 		//if (Random.bool(.5)) {
 		const angle = Random.angle();
 		const cos = Math.cos(angle);
@@ -3563,7 +3577,7 @@ const DATA = {
 		return true;
 	}),
 	[TYPES.POWER_LAVA]: new Element(100, [Color.CYAN, Color.BLUE, Color.SKY_BLUE], 0.7, 0, (x, y) => {
-		liquidUpdate(x, y);
+		liquidUpdate(x, y, soundEffects.lavaSound);
 
 		Element.react(x, y - Math.floor((Math.random() * 6)), TYPES.AIR, TYPES.BLUE_FIRE, 0.007);
 		Element.reactMany(x, y, WATER_TYPES, TYPES.SMOKE, 0.005);
@@ -3578,12 +3592,13 @@ const DATA = {
 		lavaUpdate(x, y, TYPES.BLUE_FIRE);
 	}),
 	[TYPES.LAVA]: new Element(100, [new Color("#bf1000"), new Color("#bf2010")], 0.75, 0, (x, y) => {
-		liquidUpdate(x, y);
+		liquidUpdate(x, y, soundEffects.lavaSound);
 
 		lavaUpdate(x, y, TYPES.FIRE);
 
 		if (Random.bool(.0005)) Element.react(x, y - 1, TYPES.AIR, TYPES.FIRE);
-		Element.consumeReactMany(x, y, WATER_TYPES, TYPES.STONE);
+		if (Element.consumeReactMany(x, y, WATER_TYPES, TYPES.STONE))
+			soundEffects.solidifySound.frequency++;
 
 		if (Element.isType(x, y - 1, TYPES.LIGHTNING)) {
 			Element.setCell(x, y, TYPES.POWER_LAVA);
@@ -3629,7 +3644,7 @@ const DATA = {
 	}),
 
 	[TYPES.HONEY]: new Element(0, [new Color("#996211"), new Color("#8c590d")], 0.7, 0.05, (x, y) => {
-		fluidUpdate(x, y, 1, GRAVITY, WATER_PASS_THROUGH);
+		fluidUpdate(x, y, 1, GRAVITY, WATER_PASSTHROUGH);
 	}, (x, y) => {
 		Element.trySetCell(x, y - 1, TYPES.STEAM);
 		Element.setCell(x, y, TYPES.SUGAR);
@@ -3708,18 +3723,19 @@ const DATA = {
 		new Color("#f5e764"), new Color("#e6d42c"),
 		new Color("#d1a81f"), new Color("#bd940d")
 	], 0.1, 0.05, (x, y) => {
-		chaosUpdate(x, y, LIQUID_PASS_THROUGH);
-		soundEffects.mmmm.frequency++;
+		if (chaosUpdate(x, y, LIQUID_PASSTHROUGH))
+			soundEffects.mmmm.frequency++;
 	}, (x, y) => {
-		makeCircle(x, y - 1, TYPES.HONEY, 2);
-		explode(x, y - 1, 2);
+		Element.die(x, y);
+		makeCircle(x, y, TYPES.HONEY, 2);
+		explode(x, y, 2);
 	}),
 
 	[TYPES.DAMSELFLY]: new Element(2, [
 		new Color("#34eb95"), new Color("#1ac45e"),
 		new Color("#1fb3d1"), new Color("#28d1c6"),
 		new Color("#2ee885"), new Color("#24c4e0")
-	], 0.1, 0.05, (x, y) => boidUpdate(x, y, 2, 0.2, LIQUID_PASS_THROUGH), (x, y) => {
+	], 0.1, 0.05, (x, y) => boidUpdate(x, y, 2, 0.2, LIQUID_PASSTHROUGH), (x, y) => {
 		makeCircle(x, y - 1, TYPES.BLOOD, 2);
 		explode(x, y - 1, 2);
 	}),
@@ -3732,7 +3748,7 @@ const DATA = {
 			vel.y += GRAVITY;
 			const dx = Random.bool(.5) ? -1 : 1;
 			const dy = 1 + Math.round(vel.y);
-			if (Element.tryMove(x, y, x + dx, y + dy, SOLID_PASS_THROUGH));
+			if (Element.tryMove(x, y, x + dx, y + dy, SOLID_PASSTHROUGH));
 			else {
 				let d = Random.bool() ? -1 : 1;
 				if (Element.tryMove(x, y, x + d, y)) { }
@@ -4081,6 +4097,16 @@ const DATA = {
 		} else Element.updateCell(x, y);
 	}),
 
+	[TYPES.ANTIMATTER]: new Element(1, (x, y) => {
+		return Color.lerp(new Color("#36313030"), new Color("#a8878030"), Random.voronoi2D(x, y, 0.05));
+	}, 0, 0, (x, y) => {
+		if (!chaosUpdate(x, y, ANTIMATTER_PASSTHROUGH)) {
+			Element.die(x, y);
+			makeCircle(x, y, Random.choice([TYPES.LIGHT, TYPES.ACTINIUM, TYPES.THORIUM]), 5);
+			explode(x, y, 40);
+		}
+	}),
+
 	[TYPES.LIGHTNING]: new Element(80, [new Color(100, 100, 200), Color.WHITE], 0.01, 0, (x, y) => {
 		const cell = grid[x][y];
 		if (cell.acts === -1) {
@@ -4098,7 +4124,7 @@ const DATA = {
 			for (let i = 0; i < len; i++) {
 				ox += Random.bool(0.99) ? -dx : dx;
 				const oy = y + i;
-				if (Element.trySetCell(ox, oy, TYPES.LIGHTNING, LIQUID_PASS_THROUGH)) {
+				if (Element.trySetCell(ox, oy, TYPES.LIGHTNING, LIQUID_PASSTHROUGH)) {
 					if (i < len - 1) {
 						grid[ox][oy].acts++;
 
@@ -4535,7 +4561,6 @@ const createGodRays = (image, PIXEL_SIZE = 1, DISTANCE_SCALE = PIXEL_SIZE) => {
 			vec3 hdr = albedo.rgb + glow.rgb;
 
 			// hdr = 1.0 / (1.0 + exp(-5.0 * (hdr - 0.5)));
-			// hdr = ACESFilm(hdr);
 
 			if (albedo != vec4(0.0)) return vec4(hdr, ceil(albedo.a) * (1.0 - transparency) + transparency);
 			else if (glow.a > 0.0) return vec4(hdr / glow.a, glow.a);
@@ -4599,9 +4624,21 @@ const ZOOM_SENSITIVITY = 0.1
 let SELECTORS_SHOWN = true;
 let SETTINGS_SHOWN = false;
 
-const BRUSH_TYPES = ["Circle", "Square", "Ring", "Forceful", "Row", "Column", "Line Drawing"];
+const BRUSH_TYPES = Object.fromEntries([
+	"CIRCLE", "SQUARE", "RING", "FORCEFUL", "ROW", "COLUMN", "SELECT", "DUPLICATE",  "Line Drawing"
+].map((v, i) => [v, i]));
+function brushTypeName(brushType) {
+	const name = Object.entries(BRUSH_TYPES)
+		.find(([name, inx]) => inx === brushType)[0];
+	return name[0] + name.slice(1).toLowerCase();
+};
+let BRUSH_TYPE_COUNT = Object.keys(BRUSH_TYPES).length;
 let brushType = 0;
 let eraseOnly = false;
+let brushSelectMin = null;
+let brushSelectMax = null;
+let brushSelection = null;
+let brushSelectionTex = null;
 let lineDrawingPoints = [];
 let lastDrawingPoint = undefined;
 const drawingRange = 5;
@@ -4632,7 +4669,7 @@ function handleBrushInput() {
 
 	for (const touch of touches.allPressed) {
 		const r = brushSize;
-		const { world } = touches.get(touch);
+		const { world, justPressed } = touches.get(touch);
 
 		const hovered = scene.main.getElementsWithScript(TYPE_SELECTOR).some(el => !el.hidden && el.collidePoint(world));
 
@@ -4810,8 +4847,10 @@ function handleInput() {
 	
 	function clearAll() {
 		for (let x = 0; x < WIDTH; x++)
-		for (let y = 0; y < HEIGHT; y++)
+		for (let y = 0; y < HEIGHT; y++) {
 			Element.setCell(x, y, TYPES.AIR);
+			lastIds[x][y] = -1;
+		}
 		scene.main.removeElements(scene.main.getElementsWithScript(DYNAMIC_OBJECT));
 		lineDrawingPoints = [];
 		for (let i = 0; i < particles.length; i++)
@@ -4847,11 +4886,11 @@ function handleInput() {
 		for (const key of keyboard.downQueue) {
 			if (keyboard.released("Shift")) {
 				if (key === "ArrowRight" || key === ".") {
-					if (brushType + 1 < BRUSH_TYPES.length) brushType++;
+					if (brushType + 1 < BRUSH_TYPE_COUNT) brushType++;
 					else brushType = 0;
 				} else if (key === "ArrowLeft" || key === ",") {
 					if (brushType > 0) brushType--;
-					else brushType = BRUSH_TYPES.length - 1;
+					else brushType = BRUSH_TYPE_COUNT - 1;
 				} else if (key === "ArrowUp") brushSize++;
 				else if (key === "ArrowDown") brushSize = Math.max(brushSize - 1, 1);
 				else if (key === "e") {
@@ -4901,7 +4940,7 @@ function handleInput() {
 								Element.die(i + x, j + y);
 							}
 						}
-						const minBounds = new Vector2(0, 0);
+						const minBounds = Vector2.origin;
 						const maxBounds = new Vector2(CHUNK_WIDTH - 1, CHUNK_HEIGHT - 1);
 						const minChunk = Vector2.clamp(Vector2.floor(bounds.min.over(CHUNK)), minBounds, maxBounds);
 						const maxChunk = Vector2.clamp(Vector2.ceil(bounds.max.over(CHUNK)), minBounds, maxBounds);
@@ -5079,25 +5118,32 @@ function displayBrushPreview() {
 		const brushPreviewArgs = [eraseOnly ? Color.RED : Color.LIME, 1 / scene.camera.zoom];
 		const cellBrushSize = brushSize * CELL;
 		renderer.draw(brushPreviewArgs[0]).circle(mouse.world, brushPreviewArgs[1]);
-		switch (BRUSH_TYPES[brushType]) {
-			case "Circle":
+		switch (brushType) {
+			case BRUSH_TYPES.CIRCLE:
 				renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize);
 				break;
-			case "Square":
+			case BRUSH_TYPES.SQUARE:
 				renderer.stroke(...brushPreviewArgs).rect(Rect.fromMinMax(mouse.world.minus(cellBrushSize), mouse.world.plus(cellBrushSize)));
 				break;
-			case "Ring":
+			case BRUSH_TYPES.RING:
 				renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize);
 				renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize - CELL);
 				break;
-			case "Forceful": {
+			case BRUSH_TYPES.FORCEFUL: {
 				renderer.stroke(...brushPreviewArgs).shape(new Polygon(Polygon.regular(24, cellBrushSize).vertices.map((v, i) => i % 2 ? v.times(1.3) : v)).move(mouse.world));
 			}; break;
-			case "Row":
+			case BRUSH_TYPES.ROW:
 				renderer.stroke(...brushPreviewArgs).rect(0, mouse.world.y - cellBrushSize, WIDTH * CELL, cellBrushSize * 2);
 				break;
-			case "Column":
+			case BRUSH_TYPES.COLUMN:
 				renderer.stroke(...brushPreviewArgs).rect(mouse.world.x - cellBrushSize, 0, cellBrushSize * 2, HEIGHT * CELL);
+				break;
+			case BRUSH_TYPES.DUPLICATE:
+				if (brushSelection)
+					renderer.image(brushSelectionTex).rect(Math.floor(mouse.world.x / CELL) * CELL, Math.floor(mouse.world.y / CELL) * CELL, brushSelectionTex.width * CELL, brushSelectionTex.height * CELL);
+			case BRUSH_TYPES.SELECT:
+				if (brushSelectMin && brushSelectMax)
+					renderer.stroke(...brushPreviewArgs).rect(Rect.fromMinMax(brushSelectMin.times(CELL), brushSelectMax.times(CELL)));
 				break;
 			case "Line Drawing":
 				renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize);
@@ -5249,6 +5295,8 @@ class SynthSoundEffect {
 			synth.play(props);
 			this.toPlay--;
 		}
+		
+		this.frequency = 0;
 	}
 }
 
@@ -5277,6 +5325,8 @@ class EventSoundEffect {
 			this.sound.play(this.volume);
 			this.toPlay--;
 		}
+		
+		this.frequency = 0;
 	}
 }
 
@@ -5345,6 +5395,8 @@ class SoundEffectState {
 				this.instances[i] = new BlendedEffectInstance(this.sound, volume);
 			this.instances[i].update();
 		}
+
+		this.frequency = 0;
 	}
 };
 
@@ -5353,15 +5405,6 @@ const soundEffects = Object.fromEntries(Object.entries(SOUND_EFFECTS)
 ));
 
 const allSoundEffects = [soundEffects, eventSoundEffects, synthSoundEffects];
-
-function clearSoundEffectDensity() {
-	for (let i = 0; i < allSoundEffects.length; i++) {
-		const effect = allSoundEffects[i];
-		const keys = Object.keys(effect);
-		for (let i = 0; i < keys.length; i++)
-			effect[keys[i]].frequency = 0;
-	}
-}
 
 function updateSoundEffects() {
 	for (let i = 0; i < allSoundEffects.length; i++) {
@@ -5374,7 +5417,6 @@ function updateSoundEffects() {
 
 intervals.continuous(time => {
 	// try {
-		clearSoundEffectDensity();
 
 		handleInput();
 		injectDynamicBodies();
@@ -5416,7 +5458,7 @@ intervals.continuous(time => {
 			};
 			
 			renderer.textMode = TextMode.TOP_LEFT;
-			text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, brushType: ${BRUSH_TYPES[brushType]} | ${brushType}, paused: ${paused}, RTX: ${RTX}, fps: ${intervals.fps}`, 10, 10);
+			text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, brushType: ${brushTypeName(brushType)} | ${brushType}, paused: ${paused}, RTX: ${RTX}, fps: ${intervals.fps}`, 10, 10);
 			renderer.textMode = TextMode.TOP_RIGHT;
 			text(Font.Arial15, hoveredElementType ? typeName(hoveredElementType) + (hoveredElementActs ? " (" + hoveredElementActs + ")" : "") : "", width - 10, 10);
 		}
