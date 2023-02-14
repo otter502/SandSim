@@ -4664,6 +4664,11 @@ backgroundTex.shader((x, y, dest) => {
 	);
 });
 
+
+
+
+
+
 function handleBrushInput() {
 	if (keyboard.pressed("Control")) return;
 
@@ -4702,15 +4707,15 @@ function handleBrushInput() {
 						Element.setCell(x, y, brush);
 				}
 			};
-			const freezeParticle = (x, y) => {
-				if (Element.inBounds(x, y)) {
-					particles.filter((p, index, arr) => 
-						(Math.abs(p.position.x - x) < 1) && (Math.abs(p.position.y - y) < 1) && (Element.isEmpty(x, y))
-					).forEach((particle, index, arr)=>{
-						particle.solidify();
-					});
-				}
-			}
+			// const freezeParticle = (x, y) => {
+			// 	if (Element.inBounds(x, y)) {
+			// 		particles.filter((p, index, arr) => 
+			// 			(Math.abs(p.position.x - x) < 1) && (Math.abs(p.position.y - y) < 1) && (Element.isEmpty(x, y))
+			// 		).forEach((particle, index, arr)=>{
+			// 			particle.solidify();
+			// 		});
+			// 	}
+			// }
 			const handleLine = (x, y, x1, y1, chance = 0.2, passthrough = undefined) => {
 				const minX = Math.min(x, x1) - r;
 				const minY = Math.min(y, y1) - r;
@@ -4724,43 +4729,42 @@ function handleBrushInput() {
 					}
 				}
 			}
-
-			if (brushType == 0) { // Circle
-				for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-					if (i * i + j * j < r * r) {
-						const x = i + ox;
-						const y = j + oy;
-						handleCell(x, y);
-					}
-				}
-			}
-			else if (brushType == 1) { // Square
-				let or = r - 1;
-				for (let i = -or; i <= or; i++) for (let j = -or; j <= or; j++) {
-					const x = i + ox;
-					const y = j + oy;
-					handleCell(x, y);
-				}
-			}
-			else if (brushType == 2) { // Ring
-				for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
-					if (i * i + j * j < r * r && i * i + j * j >= (r - 1) * (r - 1)) {
-						const x = i + ox;
-						const y = j + oy;
-						handleCell(x, y);
-					}
-				}
-			}
-			else if (brushType == 3) { // Forceful
-				const CHAOS = 1;
-				const vel = 0.3;
-				if (!eraseOnly){
+			switch (brushType) {
+				case BRUSH_TYPES.CIRCLE: {
 					for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
 						if (i * i + j * j < r * r) {
 							const x = i + ox;
 							const y = j + oy;
+							handleCell(x, y);
+						}
+					}
+				}; break;
+				case BRUSH_TYPES.SQUARE: {
+					let or = r - 1;
+					for (let i = -or; i <= or; i++) for (let j = -or; j <= or; j++) {
+						const x = i + ox;
+						const y = j + oy;
+						handleCell(x, y);
+					}
+				}; break;
+				case BRUSH_TYPES.RING: {
+					for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+						if (i * i + j * j < r * r && i * i + j * j >= (r - 1) * (r - 1)) {
+							const x = i + ox;
+							const y = j + oy;
+							handleCell(x, y);
+						}
+					}
+				}; break;
+				case BRUSH_TYPES.FORCEFUL: {
+					const CHAOS = 1;
+					const vel = 0.3;
+					if(!eraseOnly){
+						for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+							if (i * i + j * j < r * r) {
+								const x = i + ox;
+								const y = j + oy;
 								handleCell(x, y);
-								
 								if (Element.inBounds(x, y)) createParticle(
 									new Vector2(x, y),
 									new Vector2(
@@ -4768,79 +4772,117 @@ function handleBrushInput() {
 										vel * j + Random.range(-CHAOS, CHAOS)
 									)
 								);
-							
+							}
+						}
+					} else{
+						if(brush === TYPES.AIR){
+							return;
+						}
+						particles.filter((p, index, arr) => 
+							(Vector2.dist(p.position, new Vector2(ox,oy)) < r) && (Element.isEmpty(...Vector2.floor(p.position).values))
+						).forEach((particle, index, arr)=>{
+							particle.solidify();
+						});
+					}
+				}; break;
+				case BRUSH_TYPES.ROW: {
+					let disp = oy-oyl;
+					for (let i = 0; i <= WIDTH; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
+						const x = i;
+						const y = j + oy;
+						handleCell(x, y);
+					}
+				}; break;
+				case BRUSH_TYPES.COLUMN: {
+					let disp = ox-oxl;
+					for (let i = 0; i <= HEIGHT; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
+						const x = j + ox;
+						const y = i;
+						handleCell(x, y);
+					}
+				}; break;
+				case BRUSH_TYPES.SELECT: {
+					if (!brushSelectMin || justPressed) {
+						brushSelectMin = new Vector2(ox, oy);
+						brushSelectMax = null;
+					} else {
+						brushSelectMax = new Vector2(ox + 1, oy + 1);
+						const { x, y, width, height } = Rect.fromMinMax(brushSelectMin, brushSelectMax)
+							.clip(new Rect(0, 0, WIDTH, HEIGHT));
+						if (width >= 1 && height >= 1) {
+							brushSelection = Array.dim(width, height)
+								.map((_, lx, ly) => grid[lx + x][ly + y].get());
+							brushSelectionTex = new Texture(width, height)
+								.shader((lx, ly, dest) => {
+									const color = DATA[grid[lx + x][ly + y].id].getColor(lx + x, ly + y);
+									dest.set(color);
+									if (color.brightness) dest.alpha = 0.3;
+								});
 						}
 					}
-				} else{
-					if(brush === TYPES.AIR){
-						return;
+				}; break;
+				case BRUSH_TYPES.DUPLICATE: {
+					if (brushSelection) {
+						for (let i = 0; i < brushSelection.length; i++)
+						for (let j = 0; j < brushSelection[0].length; j++) {
+							if (Element.inBounds(ox + i, oy + j)) {
+								const cell = brushSelection[i][j];
+								if (!cell.id) continue;
+								if (eraseOnly) {
+									Element.die(ox + i, oy + j);
+								} else {
+									cell.get(grid[ox + i][oy + j]);
+									Element.updateCell(ox + i, oy + j);
+								}
+							}
+						}
 					}
-					particles.filter((p, index, arr) => 
-						(Vector2.dist(p.position, new Vector2(ox,oy)) < r) && (Element.isEmpty(...Vector2.floor(p.position).values))
-					).forEach((particle, index, arr)=>{
-						particle.solidify();
-					});
-				}
-			}
-			else if (brushType == 4) { // Row
-				let disp = oy-oyl;
-				for (let i = 0; i <= WIDTH; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
-					const x = i;
-					const y = j + oy;
-					handleCell(x, y);
-				}
-			}
-			else if (brushType == 5) { // Columm
-				let disp = ox-oxl;
-				for (let i = 0; i <= HEIGHT; i++) for (let j = -(r - 1); j <= (r - 1); j++) {
-					const x = j + ox;
-					const y = i;
-					handleCell(x, y);
-				}
-			}
-			else if (brushType == 6) { // TODO line drawing, right click = apply, erase only = clear, changing brush type will clear it,
-				//need to add a limiter so it doesn't create 50 of the same points, it will be rounded
-				//size of the brush = size of line using make lines
-				if(keyboard.pressed("k")){
-					lineDrawingPoints = [];
-				}
-				if(keyboard.pressed("m")){
-					console.log("click");
-					for (let i = 0; i < lineDrawingPoints.length - 1; i++) {
-						handleLine(
-							...lineDrawingPoints[i].values,
-							...lineDrawingPoints[i + 1].values
-						);
+				}; break;
+				case BRUSH_TYPES.LINE: {
+					//need to add a limiter so it doesn't create 50 of the same points, it will be rounded
+					//size of the brush = size of line using make lines
+					if(keyboard.pressed("k")){
+						lineDrawingPoints = [];
 					}
-					// let prevValue;
-					// let currentValue;
-					// let values = lineDrawingPoints.values();
-					// prevValue = lineDrawingPoints[0];
-					// for (const value of lineDrawingPoints) {
-					// 	currentValue = value;
-					// 	handleLine(prevValue[0], prevValue[1], currentValue[0], currentValue[1]);
-					// 	prevValue = currentValue;
-					// }
-					lineDrawingPoints = [];
-				}
-				if(keyboard.pressed("n")){
-					const lastDrawingPoint = lineDrawingPoints.last;
-					if (!lineDrawingPoints.length || Vector2.dist(lastDrawingPoint, new Vector2(ox, oy)) > drawingRange){
-						lineDrawingPoints.push(new Vector2(ox, oy));
-						// lastDrawingPoint = [ox,oy]
-						// console.log(lastDrawingPoint);
-						// console.log(lineDrawingPoints);
-						// console.log(ox + " | " + oy);
-						// console.log(mouse.world);
-						// console.log((Math.abs(ox-lastDrawingPoint[0]) < 5) + " | " + (Math.abs(oy-lastDrawingPoint[1]) < 5));
-					}// makeLine(oxl, oyl, oxl+10, oyl+10, TYPES.STONE, 5);
-					//apply
-					console.log("clack");
-					
-				}
+					if(keyboard.pressed("m")){
+						console.log("click");
+						for (let i = 0; i < lineDrawingPoints.length - 1; i++) {
+							handleLine(
+								...lineDrawingPoints[i].values,
+								...lineDrawingPoints[i + 1].values
+							);
+						}
+						// let prevValue;
+						// let currentValue;
+						// let values = lineDrawingPoints.values();
+						// prevValue = lineDrawingPoints[0];
+						// for (const value of lineDrawingPoints) {
+						// 	currentValue = value;
+						// 	handleLine(prevValue[0], prevValue[1], currentValue[0], currentValue[1]);
+						// 	prevValue = currentValue;
+						// }
+						lineDrawingPoints = [];
+					}
+					if(keyboard.pressed("n")){
+						const lastDrawingPoint = lineDrawingPoints.last;
+						if (!lineDrawingPoints.length || Vector2.dist(lastDrawingPoint, new Vector2(ox, oy)) > drawingRange){
+							lineDrawingPoints.push(new Vector2(ox, oy));
+							// lastDrawingPoint = [ox,oy]
+							// console.log(lastDrawingPoint);
+							// console.log(lineDrawingPoints);
+							// console.log(ox + " | " + oy);
+							// console.log(mouse.world);
+							// console.log((Math.abs(ox-lastDrawingPoint[0]) < 5) + " | " + (Math.abs(oy-lastDrawingPoint[1]) < 5));
+						}// makeLine(oxl, oyl, oxl+10, oyl+10, TYPES.STONE, 5);
+						//apply
+						console.log("clack");
+						
+					}
+				} break;
 			}
 		}
 	}
+	
 }
 
 function handleInput() {
