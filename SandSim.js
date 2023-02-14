@@ -4625,7 +4625,7 @@ let SELECTORS_SHOWN = true;
 let SETTINGS_SHOWN = false;
 
 const BRUSH_TYPES = Object.fromEntries([
-	"CIRCLE", "SQUARE", "RING", "FORCEFUL", "ROW", "COLUMN", "SELECT", "DUPLICATE",  "Line Drawing"
+	"CIRCLE", "SQUARE", "RING", "FORCEFUL", "ROW", "COLUMN", "SELECT", "DUPLICATE",  "LINE"
 ].map((v, i) => [v, i]));
 function brushTypeName(brushType) {
 	const name = Object.entries(BRUSH_TYPES)
@@ -5145,7 +5145,7 @@ function displayBrushPreview() {
 				if (brushSelectMin && brushSelectMax)
 					renderer.stroke(...brushPreviewArgs).rect(Rect.fromMinMax(brushSelectMin.times(CELL), brushSelectMax.times(CELL)));
 				break;
-			case "Line Drawing":
+			case BRUSH_TYPES.LINE:
 				renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize);
 				renderer.stroke(...brushPreviewArgs).rect(Rect.fromMinMax(mouse.world.minus(cellBrushSize), mouse.world.plus(cellBrushSize)));
 
