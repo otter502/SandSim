@@ -1322,8 +1322,10 @@ for (const type of GHOST_CORAL_UNREACTIVE)
 
 const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR, TYPES.AIR, TYPES.BOUNCE_BEAM]);
 const HEAT = new Set([TYPES.FIRE,TYPES.BLUE_FIRE,TYPES.LAVA,TYPES.POWER_LAVA,TYPES.EXOTHERMIA]);
+const FIRE = new Set([TYPES.FIRE,TYPES.BLUE_FIRE]);
+
 const GERMANIUM_PASSTHROUGH = new Set([TYPES.GERMANIUM]);
-const BEAM_PASSTHROUGH = new Set([TYPES.BOUNCE_BEAM, TYPES.AIR, ...SOLID]);
+const ALL_ELEMENTS = new Set(Object.values(TYPES));
 
 function updatePixel(x, y) {
 	tex.setPixel(x, y, DATA[grid[x][y].id].getColor(x, y));
@@ -2062,8 +2064,20 @@ const DATA = {
 		let oxygen = 0;
 		cell = grid[x][y];
 		cell.vel = Vector2.fromAngle(cell.vel.angle + ((Math.sign(cell.vel.angle - Math.PI)) ? -1 : 1) * (Random.angle() / 4)).times(Random.range(1, 2));
+		
+		Element.consumeReact(x, y, TYPES.ACTIVE_NEURON, TYPES.SPIRAL_FIRE);
+		Element.consumeReact(x, y, TYPES.FIRE, TYPES.SPIRAL_FIRE);
+		Element.consumeReact(x, y, TYPES.STEAM, TYPES.AIR);
 
 		Element.affectAllNeighbors(x, y, (X, Y)=>{
+			if (Element.isTypes(X, Y, FIRE) || Element.isTypes(X, Y, NEURON) || Element.isType(X, Y, TYPES.STEAM)) {
+				Element.setCell(X, Y, TYPES.SPIRAL_FIRE);				
+			} else if (Element.isType(X, Y, TYPES.HIGH_EXPLOSIVE) || Element.isType(X, Y, TYPES.EXPLOSIVE) || Element.isType(X, Y, TYPES.EXPLOSIVE_DUST)){
+				Element.setCell(X, Y, TYPES.SPIRAL_FIRE);
+				if (Random.bool(.50)) explode(x, y, Random.int(5, 40));
+				makeCircle(x, y, TYPES.SPIRAL_FIRE, 10)
+
+			}
 			if (Element.isEmpty(X, Y))
 				oxygen++;
 			else {
@@ -2186,7 +2200,7 @@ const DATA = {
 		
 		if(!Element.inBounds(x, Math.round(y + cell.vel.y))) cell.vel.y *= -1;
 
-		if (Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y), BEAM_PASSTHROUGH)) Element.die(x,y);
+		if (Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y), ALL_ELEMENTS)) Element.die(x,y);
 	}),
 
 	[TYPES.MUSCLE]: new Element(1, (x, y) => {
