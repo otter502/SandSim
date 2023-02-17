@@ -238,13 +238,6 @@ const SAVE_FILE_PATH = "world.vand";
 
 fileSystem.createFileType(WorldSave, ["sand", "vand"]);
 
-class ClipBoardSave{
-	constructor(){
-		this.clipBoard = [[]];
-
-	}
-}
-
 class Cell {
 	constructor(id) {
 		this.id = id;
@@ -1936,7 +1929,7 @@ const DATA = {
 				makeCircle(x,y,TYPES.ACID,10);
 			}  
 			if (Element.isType(ox, oy, TYPES.SPIRAL_FIRE) && Random.bool(0.35)){
-				makeCircle(ox, oy, TYPES.SPIRAL_FIRE, 2, 1, TERMINATOR_UNREACTIVE);
+				makeCircle(ox, oy, TYPES.ANTIMATTER, 2, 1, TERMINATOR_UNREACTIVE);
 			} else
 			if(Element.isType(ox, oy, TYPES.ICE)&& cell.acts<100 && Random.bool((1/cell.acts))){
 				makeCircle(x, y, TYPES.ICE,2,1,TERMINATOR_UNREACTIVE);
@@ -2076,7 +2069,11 @@ const DATA = {
 		cell.vel = Vector2.fromAngle(cell.vel.angle + ((Math.sign(cell.vel.angle - Math.PI)) ? -intensity : intensity) * (Random.angle() / 4)).times(Random.range(1, 2));
 		
 		Element.consumeReact(x, y, TYPES.ACTIVE_NEURON, TYPES.SPIRAL_FIRE);
-		Element.consumeReact(x, y, TYPES.FIRE, TYPES.SPIRAL_FIRE);
+		Element.consumeReact(x, y, GAS_PASSTHROUGH, TYPES.SPIRAL_FIRE);
+		Element.consumeReact(x, y, TYPES.LAVA, TYPES.GREEN_LAVA);
+		Element.consumeReact(x, y, TYPES.POWER_LAVA, TYPES.GREEN_LAVA);
+
+
 		Element.consumeReact(x, y, TYPES.STEAM, TYPES.AIR);
 
 		Element.affectAllNeighbors(x, y, (X, Y)=>{
@@ -2144,6 +2141,9 @@ const DATA = {
 
 		Element.react(x, y - Math.floor((Math.random() * Random.range(0,3))), TYPES.AIR, TYPES.SPIRAL_FIRE, 0.005);
 		Element.reactMany(x, y, WATER_TYPES, TYPES.HYDROGEN, 0.25);
+		
+		Element.consumeReact(x, y, TYPES.LAVA, TYPES.GREEN_LAVA);
+		Element.consumeReact(x, y, TYPES.POWER_LAVA, TYPES.GREEN_LAVA);
 
 		if (Random.bool(.5)) Element.react(x, y, TYPES.STONE, TYPES.SMOKE);
 		if (Random.bool(.3)) Element.react(x, y, TYPES.GLASS, TYPES.HYDROGEN);
@@ -2229,7 +2229,7 @@ const DATA = {
 			return Color.colorScale(color, (1 - p) * 0.25 + 0.5);
 		};
 		return layer(x, y);
-	}, 0, 0.01, (x,y) => {
+	}, 0, 0, (x,y) => {
 		const cell = grid[x][y];
 		if(cell.vel.mag == 0){
 			// cell.vel = Vector2.fromAngle(Random.angle()).times(Random.range(3, 5));
