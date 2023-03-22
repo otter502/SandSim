@@ -1,5 +1,7 @@
 const synth = new Synth();
 
+let simFrameCount = 0;
+
 title = "Sandulation";
 document.getElementsByTagName("link")[0].href = "./favicon.ico";
 
@@ -34,13 +36,13 @@ const TYPES = Object.fromEntries([
 	"SUNFLOWER_PETAL", "SUNFLOWER_STEM", "SUNFLOWER_SEED",
 	"SOIL", "DAMP_SOIL", "ROOT", "GRASS", "FLOWER",
 	"HIGH_EXPLOSIVE", "EXPLOSIVE", "EXPLOSIVE_DUST", "FLASH_PAPER", "WET_PAPER",
-	"STONE", "CONDENSED_STONE", "MARBLE",
+	"STONE", "CONDENSED_STONE", "MARBLE", "GRANITE", "MEDUSAS_GEM", "CARO_GEM",
 	"CLAY", "BRICK",
 	"TILE_BASE", "DECUMAN_TILE",
 	"GLAZE_BASE", "DECUMAN_GLAZE",
 	"PRIDIUM", "GENDERFLUID",
 	"PARTICLE",
-	"EXOTHERMIA", "FIRE", "BLUE_FIRE", "SPIRAL_FIRE", "BOUNCE_BEAM",
+	"EXOTHERMIA", "FIRE", "BLUE_FIRE", "SPIRAL_FIRE", "BOUNCE_BEAM", "BOUNCE_GREEN_BEAM",
 	"BAHHUM", //"GREEK_FIRE",
 	"ESTIUM", "ESTIUM_GAS",
 	"DDT", 
@@ -53,17 +55,17 @@ const TYPES = Object.fromEntries([
 	"WAX", "GRAINY_WAX", "MOLTEN_WAX",
 	"LAVA", "POWER_LAVA", "GREEN_LAVA",
 	"STEAM", "SMOKE", "HYDROGEN",
-	"GLASS", "ACID",
+	"GLASS", "ACID", "UNSTABLE_ELEMENT", "SEMI_STABLE_ELEMENT",
 	"BATTERY", "ELECTRICITY","GERMANIUM", "ACTIVE_GERMANIUM", "BOID",
 	"CONVEYOR_LEFT", "CONVEYOR_RIGHT", "STEEL",
 	"COPPER", "LIQUID_COPPER",
 	"LEAD", "LIQUID_LEAD",
-	"GOLD", "AUREATE_DUST", "LIQUID_GOLD",
+	"GOLD", "AUREATE_DUST", "LIQUID_GOLD", "MAGNESIUM", "MAGNESIUM_FIRE",
 	"IRON", "LIQUID_IRON", "RUST",
 	"MERCURY", "TERMINATOR",
-	"RADIUM", "ACTINIUM", "THORIUM",
+	"RADIUM", "RADIUM_GEM", "ACTINIUM", "THORIUM",
 	"ANTIMATTER",
-	"LIGHTNING", "LIGHT", "LIGHT_SAD", "BOUNCY_BALL",
+	"LIGHTNING", "LIGHT", "LIGHT_SAD", "BOUNCY_BALL", "CONWAY_ALIVE", "CONWAY_DEAD",
 	"BLOOD", "MUSCLE", "BONE", "BONE_DUST", "EPIDERMIS", "INACTIVE_NEURON", "ACTIVE_NEURON", "CEREBRUM",
 	"CORAL", "DEAD_CORAL", "ELDER_CORAL", "PETRIFIED_CORAL", "COMPRESSED_CORAL", "DEAD_COMPRESSED_CORAL", 
 	"CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER", "GHOST_CORAL", "CORPOREAL_CORAL",
@@ -122,6 +124,10 @@ class WorldSave {
 		for (let i = 0; i < this.grid.length; i++) {
 			for (let j = 0; j < this.grid[0].length; j++) {
 				const { id, reference, acts } = this.grid[i][j];
+				//if A. the previouse block is not the same as the current block or
+				//B. the duration is larger than 16 bits
+				//then write a new line
+				
 				if (lId !== id || lReference !== reference || lActs !== acts || duration === 0xFFFF) {
 					writeBlock();
 					lId = id;
@@ -1297,10 +1303,10 @@ const DISPERSION = 4;
 
 scene.physicsEngine.gravity.y = GRAVITY * CELL;
 
-const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT, TYPES.INCENSE_SMOKE]);
+const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT, TYPES.INCENSE_SMOKE, TYPES.CONWAY_ALIVE]);
 const OTHER_GAS = new Set([TYPES.AIR, ...GAS]);
 const LIQUID = new Set([TYPES.WATER, TYPES.POND_WATER, TYPES.LAVA, TYPES.POWER_LAVA, TYPES.GREEN_LAVA, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
-const GAS_PASSTHROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.SPIRAL_FIRE]);
+const GAS_PASSTHROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.SPIRAL_FIRE, TYPES.MAGNESIUM_FIRE]);
 const LIQUID_PASSTHROUGH = new Set([...GAS_PASSTHROUGH, ...GAS]);
 const WATER_PASSTHROUGH = new Set([...LIQUID_PASSTHROUGH, TYPES.OIL, TYPES.ESTIUM]);
 const SALT_WATER_SWAP_PASSTHROUGH = new Set([TYPES.WATER, TYPES.POND_WATER]);
@@ -1318,21 +1324,21 @@ const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
 const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER, TYPES.POND_WATER]);
 const GLAZE_TYPES = new Set([TYPES.GLAZE_BASE, TYPES.DECUMAN_GLAZE])
 const ANT_UNSTICKABLE = new Set([TYPES.GENDERFLUID, TYPES.COPPER, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.IRON, TYPES.LIQUID_IRON, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.MUSCLE, ...WATER_TYPES]);
-const CONDUCTIVE = new Set([TYPES.COPPER_BRICKS, TYPES.GENDERFLUID, TYPES.LIGHT_SAD, TYPES.COPPER, TYPES.GOLD, TYPES.AUREATE_DUST, TYPES.LIQUID_GOLD, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.IRON, TYPES.MUSCLE, ...WATER_TYPES]);
-const ELECTRICITY_PASSTHROUGH = new Set([...CONDUCTIVE,TYPES.GERMANIUM, TYPES.ELECTRICITY]);
+const CONDUCTIVE = new Set([TYPES.COPPER_BRICKS, TYPES.GENDERFLUID, TYPES.LIGHT_SAD, TYPES.COPPER, TYPES.GOLD, TYPES.AUREATE_DUST, TYPES.LIQUID_GOLD, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.IRON, TYPES.CONWAY_DEAD, TYPES.MUSCLE, ...WATER_TYPES]);
+const ELECTRICITY_PASSTHROUGH = new Set([...CONDUCTIVE,TYPES.GERMANIUM, TYPES.ELECTRICITY, TYPES.CONWAY_ALIVE]);
 const SUGARY = new Set([TYPES.SUGAR, TYPES.HONEY]);
 const COLD = new Set([...WATER_TYPES, ...GLAZE_TYPES, TYPES.ICE, TYPES.BLOOD, TYPES.ESTIUM, TYPES.HONEY]);
 const SOIL_TYPES = new Set([TYPES.DAMP_SOIL, TYPES.SOIL]);
 const GRASS_ROOTABLE = new Set([...SOIL_TYPES, ...WATER_TYPES]);
 const GRASS_GROWABLE = new Set([...GRASS_ROOTABLE, TYPES.GRASS, TYPES.ROOT]);
 const CONVEYOR_RESISTANT = new Set([TYPES.CONVEYOR_LEFT, TYPES.CONVEYOR_RIGHT, TYPES.CONDENSED_STONE]);
-const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM, TYPES.ACTINIUM, TYPES.THORIUM, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
+const RADIATION_RESISTANT = new Set([TYPES.AIR, TYPES.RADIUM_GEM, TYPES.RADIUM, TYPES.ACTINIUM, TYPES.THORIUM, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.CONDENSED_STONE]);
 const NEURON = new Set([TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON])
 const BRAIN = new Set([...NEURON, TYPES.CEREBRUM])
 const MEATY = new Set([...BRAIN, TYPES.EPIDERMIS, TYPES.MUSCLE, TYPES.BLOOD])
 const SUNFLOWER = new Set([TYPES.SUNFLOWER_PETAL, TYPES.SUNFLOWER_SEED, TYPES.SUNFLOWER_STEM])
 const THICKETS = new Set([TYPES.THICKET, TYPES.INCENSE, TYPES.THICKET_BUD, TYPES.THICKET_SEED, TYPES.INCENSE_SMOKE, TYPES.THICKET_STEM]);
-const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS, TYPES.GHOST_CORAL]);
+const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS, TYPES.GHOST_CORAL, TYPES.BOUNCE_BEAM, TYPES.BOUNCE_GREEN_BEAM]);
 const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL, TYPES.CORPOREAL_CORAL, TYPES.COMPRESSED_CORAL])
 const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL, TYPES.GHOST_CORAL, TYPES.DEAD_COMPRESSED_CORAL])
 const INSECT = new Set([TYPES.BEE, TYPES.ANT, TYPES.DAMSELFLY, TYPES.MITE, TYPES.LIGHTNING_BUG]);
@@ -1344,18 +1350,28 @@ const ANTIMATTER_PASSTHROUGH = new Set([TYPES.AIR, TYPES.ANTIMATTER]);
 const CORALS = new Set([...CORAL_OFF, ...CORAL_ON, TYPES.CORAL_CONSUMER, TYPES.CORAL_PRODUCER, TYPES.CORAL_STIMULANT]);
 const GHOST_CORAL_UNREACTIVE = new Set([...CORALS, TYPES.GLASS, ...CONVEYOR_RESISTANT, TYPES.AIR]);
 const GHOST_CORAL_REACT = new Set(Object.values(TYPES));
+const GROUND = new Set([TYPES.STONE, TYPES.CONDENSED_STONE, TYPES.MARBLE]);
+
+const LIGHTNING_PASSTHROUGH = new Set([...LIQUID_PASSTHROUGH, TYPES.SAND]);
+
+const RADIUM_GEM_RESISTANT = new Set([TYPES.BAHHUM, TYPES.TERMINATOR]);
+
+
 GHOST_CORAL_UNREACTIVE.delete(TYPES.CORAL_STIMULANT);
 GHOST_CORAL_REACT.delete(TYPES.PARTICLE);
 for (const type of GHOST_CORAL_UNREACTIVE)
 	GHOST_CORAL_REACT.delete(type);
 
+const URANIUM_PASSTHROUGH = new Set(Object.values(TYPES));
+URANIUM_PASSTHROUGH.delete(TYPES.URANIUM);
 
-const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR, TYPES.AIR, TYPES.BOUNCE_BEAM]);
+const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR, TYPES.AIR]);
 const HEAT = new Set([TYPES.FIRE,TYPES.BLUE_FIRE,TYPES.LAVA,TYPES.POWER_LAVA,TYPES.EXOTHERMIA]);
-const FIRE = new Set([TYPES.FIRE,TYPES.BLUE_FIRE]);
+const FIRE_TYPES = new Set([TYPES.FIRE,TYPES.BLUE_FIRE, TYPES.SPIRAL_FIRE, TYPES.MAGNESIUM_FIRE]);
+
+const GREEN_BEAM_PASSTHROUGH = new Set([...GAS_PASSTHROUGH, TYPES.BOUNCE_BEAM, TYPES.BOUNCE_GREEN_BEAM])
 
 const GERMANIUM_PASSTHROUGH = new Set([TYPES.GERMANIUM]);
-const ALL_ELEMENTS = new Set(Object.values(TYPES));
 
 function updatePixel(x, y) {
 	tex.setPixel(x, y, DATA[grid[x][y].id].getColor(x, y));
@@ -1462,8 +1478,9 @@ class Particle {
 		const { x, y } = Vector2.floor(this.position);
 		
 		updatePixel(Math.floor(this.lastPosition.x), Math.floor(this.lastPosition.y));
-
-		if (grid[x][y].id === TYPES.AIR)
+		if (renderOnVel){
+			tex.setPixel(x, y,)
+		}else if (grid[x][y].id === TYPES.AIR)
 			tex.setPixel(x, y, this.color);//new Color(0, 255, 0, Color.EPSILON));
 		// renderer.draw(this.color).rect(Math.floor(this.position.x) * CELL, Math.floor(this.position.y) * CELL, CELL, CELL);
 		// renderer.stroke(Color.RED).arrow(Math.floor(this.position.x) * CELL, Math.floor(this.position.y) * CELL, Math.floor(this.position.x + this.velocity.x) * CELL, Math.floor(this.position.y + this.velocity.y) * CELL);
@@ -1967,7 +1984,7 @@ const DATA = {
 		Element.updateCell(x,y);
 		Element.affectAllNeighbors(x,y,(ox, oy) => {
 			if(Element.isType(ox,oy,TYPES.BAHHUM)){
-				makeCircle(x,y,TYPES.ACID,10);
+				makeCircle(x,y,TYPES.ACID,5);
 			}  
 			if (Element.isType(ox, oy, TYPES.SPIRAL_FIRE) && Random.bool(0.35)){
 				makeCircle(ox, oy, TYPES.ANTIMATTER, 2, 1, TERMINATOR_UNREACTIVE);
@@ -2105,12 +2122,16 @@ const DATA = {
 		let burned = false;
 		let neighbors = 0;
 		let oxygen = 0;
+		let meat = 0;
 		let intensity = 0.9;
 		cell = grid[x][y];
 		cell.vel = Vector2.fromAngle(cell.vel.angle + ((Math.sign(cell.vel.angle - Math.PI)) ? -intensity : intensity) * (Random.angle() / 4)).times(Random.range(1, 2));
 		
 		Element.consumeReact(x, y, TYPES.ACTIVE_NEURON, TYPES.SPIRAL_FIRE);
-		Element.consumeReact(x, y, GAS_PASSTHROUGH, TYPES.SPIRAL_FIRE);
+		Element.consumeReact(x, y, TYPES.ASH, TYPES.AIR);
+
+		// Element.consumeReactMany(x, y, GAS_PASSTHROUGH, TYPES.SPIRAL_FIRE);
+		Element.consumeReactMany(x, y, LIQUID, TYPES.SPIRAL_FIRE, 0.05);
 		Element.consumeReact(x, y, TYPES.LAVA, TYPES.GREEN_LAVA);
 		Element.consumeReact(x, y, TYPES.POWER_LAVA, TYPES.GREEN_LAVA);
 
@@ -2118,8 +2139,10 @@ const DATA = {
 		Element.consumeReact(x, y, TYPES.STEAM, TYPES.AIR);
 
 		Element.affectAllNeighbors(x, y, (X, Y)=>{
-			if (Element.isTypes(X, Y, FIRE) || Element.isTypes(X, Y, NEURON) || Element.isType(X, Y, TYPES.STEAM)) {
+			if (Element.isTypes(X, Y, FIRE_TYPES) || Element.isTypes(X, Y, NEURON) || Element.isType(X, Y, TYPES.STEAM)) {
 				Element.setCell(X, Y, TYPES.SPIRAL_FIRE);				
+			}else if (Element.isTypes(X, Y, MEATY)){
+				meat++;
 			} else if (Element.isType(X, Y, TYPES.HIGH_EXPLOSIVE) || Element.isType(X, Y, TYPES.EXPLOSIVE) || Element.isType(X, Y, TYPES.EXPLOSIVE_DUST)){
 				Element.setCell(X, Y, TYPES.SPIRAL_FIRE);
 				if (Random.bool(.50)) explode(x, y, Random.int(5, 40));
@@ -2134,6 +2157,11 @@ const DATA = {
 				neighbors++;
 			}
 		})
+
+		if (meat > 3 && Random.bool(0.01)){
+			makeCircle(x, y, TYPES.SPIRAL_FIRE, 2);
+		}
+
 		if ((!burned && Random.bool(0.015)))
 			Element.die(x, y);
 		// if (burned) Element.die(x,y);
@@ -2182,10 +2210,14 @@ const DATA = {
 
 		Element.react(x, y - Math.floor((Math.random() * Random.range(0,3))), TYPES.AIR, TYPES.SPIRAL_FIRE, 0.005);
 		Element.reactMany(x, y, WATER_TYPES, TYPES.HYDROGEN, 0.25);
-		
-		Element.consumeReact(x, y, TYPES.LAVA, TYPES.GREEN_LAVA);
-		Element.consumeReact(x, y, TYPES.POWER_LAVA, TYPES.GREEN_LAVA);
+		let reacted = Element.react(x, y, TYPES.LAVA, TYPES.GREEN_LAVA);
+		reacted += Element.react(x, y, TYPES.POWER_LAVA, TYPES.GREEN_LAVA);
+		reacted += Element.reactMany(x, y, WATER_TYPES, TYPES.MAGNESIUM_FIRE);
 
+		
+		if(reacted) {
+			Element.updateCell(x, y);
+		}
 		if (Random.bool(.5)) Element.react(x, y, TYPES.STONE, TYPES.SMOKE);
 		if (Random.bool(.3)) Element.react(x, y, TYPES.GLASS, TYPES.HYDROGEN);
 		if (Random.bool(.5)) Element.react(x, y, TYPES.SUGAR, Random.bool(0.75) ? TYPES.STEAM : TYPES.GREEN_LAVA);
@@ -2196,6 +2228,32 @@ const DATA = {
 
 		lavaUpdate(x, y, TYPES.SPIRAL_FIRE);
 	}),
+
+	[TYPES.URANIUM]: new Element(0, (x, y) => {
+		let acts = grid[x][y].acts+1;
+		let actsColor = Math.round((acts/15)*255);
+ 		let color = new Color(Math.round(actsColor/2), actsColor, Math.round(actsColor/2), 0);
+		return color;
+	}, 0.7, 0, (x, y) => {
+		const maxValue = 15;
+		// solidUpdate(x, y, GRAVITY * 0.2, 0.05, (x, y, fx, fy, j) => Element.tryMove(x, y, fx, fy, ALL_PASSTHROUGH));
+		if(grid[x][y] < 5){
+			gasUpdate(x, y, ALL_PASSTHROUGH);
+		} else {
+			liquidUpdate(x, y, undefined, ALL_PASSTHROUGH);
+		}
+		if (Random.bool(0.01)) {
+			grid[x][y].acts++;
+			// lastIds[x][y] = TYPES.PLACEHOLDER;
+			updatePixel(x, y);
+		}	
+		// if (grid[x][y].acts > maxValue){
+		// 	Element.setCell(x, y, TYPES.STEAM);		
+		// }
+		Element.updateCell(x, y);
+	}),
+
+	[TYPES.PLACEHOLDER]: new Element(0, new Color(0,0,0,0)),
 
 	
 	[TYPES.EXOTHERMIA]: new Element(1, (x, y) => {
@@ -2282,8 +2340,75 @@ const DATA = {
 		
 		if(!Element.inBounds(x, Math.round(y + cell.vel.y))) cell.vel.y *= -1;
 
-		if (Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y), ALL_ELEMENTS)) Element.die(x,y);
+		if (Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y), ALL_PASSTHROUGH)) Element.die(x,y);
 	}),
+
+	[TYPES.BOUNCE_GREEN_BEAM]: new Element(0,(x,y)=>{
+		const color = new Color("#00ffa6");
+		const layer = (x, y) => {
+			const angle = Math.PI / 2;
+			const c = Math.cos(angle);
+			const s = Math.sin(angle);
+			[x, y] = [x * c - y * s, x * s + y * c];
+			y += Random.perlin(x, 5) * 3;
+			const p = Random.voronoi2D(x, y, 0.1);
+			return Color.colorScale(color, (1 - p) * 0.25 + 0.5);
+		};
+		return layer(x, y);
+	}, 0, 0, (x,y) => {
+		const cell = grid[x][y];
+		if(cell.vel.mag == 0){
+			// cell.vel = Vector2.fromAngle(Random.angle()).times(Random.range(3, 5));
+			cell.vel.x = Random.bool(0.5) ? 1 : -1;
+			cell.vel.y = Random.bool(0.5) ? 1 : -1;
+		}
+
+		if(!Element.isEmpty(Math.round(x + cell.vel.x), y, GREEN_BEAM_PASSTHROUGH)) cell.vel.x *= -1;
+		
+		if(!Element.isEmpty(x, Math.round(y + cell.vel.y), GREEN_BEAM_PASSTHROUGH)) cell.vel.y *= -1;
+
+		if(!Element.isEmpty(Math.round(x + cell.vel.x), Math.round(y + cell.vel.y), GREEN_BEAM_PASSTHROUGH)) {
+			cell.vel.y *= -1;
+			cell.vel.x *= -1;
+		}
+		
+		if (Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y), GREEN_BEAM_PASSTHROUGH)) {
+			Element.setCell(x, y, TYPES.BLUE_FIRE);
+			// if (Random.bool(0.1)) makeCircle(Math.round(x - cell.vel.x), Math.round(y - cell.vel.y), TYPES.BLUE_FIRE, 2, 0.1);
+		}
+		Element.updateCell(x, y)
+	}),
+
+	[TYPES.GHOST_BEAM]: new Element(0,(x,y)=>{
+		const color = new Color("#00ffa6");
+		const layer = (x, y) => {
+			const angle = Math.PI / 2;
+			const c = Math.cos(angle);
+			const s = Math.sin(angle);
+			[x, y] = [x * c - y * s, x * s + y * c];
+			y += Random.perlin(x, 5) * 3;
+			const p = Random.voronoi2D(x, y, 0.1);
+			return Color.colorScale(color, (1 - p) * 0.25 + 0.5);
+		};
+		return layer(x, y);
+	}, 0, 0, (x,y) => {
+		const cell = grid[x][y];
+		if(cell.vel.mag == 0){
+			// cell.vel = Vector2.fromAngle(Random.angle()).times(Random.range(3, 5));
+			cell.vel.x = Random.bool(0.5) ? 1 : -1;
+			cell.vel.y = Random.bool(0.5) ? 1 : -1;
+		}
+
+		if(!Element.isEmpty(Math.round(x + cell.vel.x), y, GREEN_BEAM_PASSTHROUGH)) cell.vel.x *= -1;
+		
+		if(!Element.isEmpty(x, Math.round(y + cell.vel.y), GREEN_BEAM_PASSTHROUGH)) cell.vel.y *= -1;
+
+		if (Element.tryMove(x, y, Math.round(x + cell.vel.x), Math.round(y + cell.vel.y), GREEN_BEAM_PASSTHROUGH)) {
+			Element.setCell(x, y, TYPES.BLUE_FIRE);
+			// if (Random.bool(0.1)) makeCircle(Math.round(x - cell.vel.x), Math.round(y - cell.vel.y), TYPES.BLUE_FIRE, 2, 0.1);
+		}
+		else Element.updateCell(x, y)
+	}, true),
 
 	[TYPES.MUSCLE]: new Element(1, (x, y) => {
 		const color = new Color("#5c040401");
@@ -2807,6 +2932,23 @@ const DATA = {
 		return c;
 	}, 0.7),
 
+	[TYPES.GRANITE]: new Element(1, (x, y) => {
+		const layer = (x, y) => {
+			const angle = Math.PI / 3;
+			const c = Math.cos(angle);
+			const s = Math.sin(angle);
+			[x, y] = [x * c - y * s, x * s + y * c];
+			y /= 5;
+			y += Random.perlin(x, 5) * 3;
+			const p = Random.perlin2D(x, y, 0.1);
+			return (p > .5) ? new Color("#40322801") : new Color("#4d271701");
+		};
+		//#403228
+		//#302819
+		//#4d2717
+		return Color.avg([layer(x, y), layer(x * 5, y * 5), layer(x * 10, y * 10)]);
+	}, 0.7),
+
 	[TYPES.CONDENSED_STONE]: new Element(1, (x, y) => {
 		const layer = (x, y) => {
 			const angle = Math.PI / 3;
@@ -3073,6 +3215,8 @@ const DATA = {
 		Element.setCell(x, y, TYPES.WATER);
 		return true;
 	}),
+	
+
 
 	[TYPES.SNOW]: new Element(1, [new Color("#e1e6ed"), new Color("#dfe7f5"), new Color("#d5e0f0")], 0.5, 0.2, (x, y) => {
 		let reacted = false;
@@ -3247,6 +3391,192 @@ const DATA = {
 			liquidUpdate(x, y, soundEffects.lavaSound);
 		lavaUpdate(x, y, TYPES.FIRE);
 	}),
+
+	[TYPES.MAGNESIUM]: new Element(200, (x, y) => {
+
+
+		y *= 1.1;
+		x *= 1.1;
+		y += Random.sampleSeed;
+		let yt = y % 2;
+
+		if (yt < 0) yt++;
+		// yt = Interpolation.smooth(yt);
+		y = ~~y;
+		x = ~~x;
+
+		const top = Random.seedRand(x + y * 2000);
+		const bottom = Random.seedRand(x + (y + 1) * 2000);
+
+		return Color.alpha(Color.lerp(new Color("#787878"), new Color("#99a7a8"), top * (1 - yt) + bottom * yt), 0.01);
+		//return new Color("#ffff0001");
+	}, 0.5, 1, () => null, (x, y) => {
+		makeCircle(x, y, TYPES.MAGNESIUM_FIRE, 3);
+		Element.die(x, y);
+		return true;
+	}),
+
+	[TYPES.MAGNESIUM_FIRE]: new Element(200, (x, y) => {
+		return Color.alpha(Color.WHITE, 200);
+	}, 0, 0, (x, y) => {
+		Element.affectAllNeighbors(x, y, (ox, oy) => {
+			if (Element.isTypes(ox, oy, WATER_TYPES)){
+				Element.setCell(ox, oy, TYPES.MAGNESIUM_FIRE);
+				makeCircle(x, y, TYPES.HYDROGEN, 10, 1, WATER_TYPES);
+				if (Random.bool(0.5)) {
+					explode(ox, oy, 5, 0.25, WATER_TYPES);
+				}
+			}
+		});
+		fireUpdate(x, y, TYPES.MAGNESIUM_FIRE, true, true);
+	}, false),
+
+	[TYPES.UNSTABLE_ELEMENT]: new Element(0, (x, y) => {
+		return Color.alpha(new Color(Random.range(0,255), 0, 0), 0);
+	}, 0, 1, (x, y) => {
+		let thisCell = grid[x][y];
+		Element.affectAllNeighbors(x, y, (ox, oy) => {
+			console.log("being run");
+			let cell = grid[ox][oy]
+			if (!Element.isEmpty(ox, oy)){
+				let isCondensed = (Element.isType(ox, oy, TYPES.CONDENSED_STONE));
+				let velocity = cell.vel.mag;
+				let coral = (Element.isTypes(ox, oy, CORAL_ON));
+				let rando = (Random.bool(0.4));
+				let isUnstable = ((rando) ? Element.isType(ox, oy, TYPES.UNSTABLE_ELEMENT) : 0);
+
+				console.log("isCondensed: " + isCondensed + "\nvelocity: " + velocity + "\ncoral: " + coral + "\nrando: " + rando + "\nisUnstable: " + isUnstable);
+
+				let count = isUnstable + isCondensed + Math.round(velocity*2) + coral;
+				console.log("the fuckkkkkkkkk");
+				console.log(count);
+				// count += (count < 2)? (rando) ? count * 2 : 1 : 0;
+				cell.acts += count;
+			}
+		});
+		if (thisCell.acts >= Random.range(50, 100)){
+			Element.setCell(x, y, TYPES.EXPLOSIVE_DUST);
+			
+		}
+		
+	}, (x, y) => {
+		grid[x][y].acts += 5;
+		Element.updateCell(x, y);
+		return true;
+	}
+	),
+
+	[TYPES.SEMI_STABLE_ELEMENT]: new Element(0, (x, y) => {
+		return Color.alpha(new Color(Random.range(0, 225), 0, Random.range(0, 255)), 0);
+	}, 0, 1, (x, y) => {
+		let thisCell = grid[x][y];
+		Element.affectAllNeighbors(x, y, (ox, oy) => {
+			console.log("being run");
+			let cell = grid[ox][oy]
+			if (!Element.isEmpty(x, y) && (Random.bool(0.005) || cell.vel.mag > 1 || Element.isTypes(ox, oy, CORAL_ON))){
+				thisCell.acts++;
+				thisCell.acts += cell.vel.mag;
+				console.log("has been detected");
+			}
+		});
+		if (thisCell.acts >= Random.range(50, 150)){
+			Element.setCell(x, y, TYPES.CONDENSED_STONE);
+			
+		}
+		
+	}, (x, y) => {
+		grid[x][y].acts += 5;
+		Element.updateCell(x, y);
+		return true;
+	}
+	),
+
+	//teleport using script similair to permeate script, distance checker?
+
+	[TYPES.MEDUSAS_GEM]: new Element(1, [new Color("#7e8d94"), new Color("#838f91")], 0.5, 0, (x, y) => {
+		const thisCell = grid[x][y];
+
+		Element.affectAllNeighbors(x, y, (X, Y) => {
+			const cell = grid[X][Y];
+
+			let reference = TYPES.AIR;
+			if (Element.isTypes(X, Y, NEURON)) {
+				reference = TYPES.MARBLE;
+			}else if (Element.isType(X, Y, TYPES.EPIDERMIS)){
+				reference = TYPES.BRICK;
+			}else if (Element.isType(X, Y, TYPES.CEREBRUM)){
+				reference = TYPES.CLAY;
+			}else if (Element.isType(X, Y, TYPES.MUSCLE)){
+				reference = TYPES.STONE;
+			}else if (Element.isType(X, Y, TYPES.BONE)){
+				reference = TYPES.CONDENSED_STONE;
+			}
+			if(reference != TYPES.AIR){
+				Element.setCell(X, Y, TYPES.MEDUSAS_GEM);
+				grid[X][Y].reference = reference;
+			}
+		});
+		thisCell.acts++;
+		if (thisCell.acts > 5) {
+			Element.dereference(x, y);
+		}
+		Element.updateCell(x, y);
+	}, (x, y) => null, true),
+
+	
+	[TYPES.CARO_GEM]: new Element(1, [new Color("#b55758"), new Color("#784445")], 0.5, 0, (x, y) => {
+		const thisCell = grid[x][y];
+
+		Element.affectAllNeighbors(x, y, (X, Y) => {
+			const cell = grid[X][Y];
+			let reference = TYPES.AIR;
+			if (Element.isType(X, Y, TYPES.MARBLE)) {
+				reference = TYPES.INACTIVE_NEURON;
+			}else if (Element.isType(X, Y, TYPES.CLAY)){
+				reference = TYPES.CEREBRUM;
+			}else if (Element.isType(X, Y, TYPES.BRICK)){
+				reference = TYPES.EPIDERMIS;
+			}else if (Element.isType(X, Y, TYPES.STONE)){
+				reference = TYPES.MUSCLE;
+			}else if (Element.isType(X, Y, TYPES.CONDENSED_STONE)){
+				reference = TYPES.BONE;
+			}
+			if(reference != TYPES.AIR){
+				Element.setCell(X, Y, TYPES.CARO_GEM);
+				grid[X][Y].reference = reference;
+			}
+		});
+		thisCell.acts++;
+		if (thisCell.acts > 5) {
+			Element.dereference(x, y);
+		}
+		Element.updateCell(x, y);
+	}, (x, y) => null, true),
+
+	[TYPES.RADIUM_GEM]: new Element(1, [new Color("#b55758"), new Color("#784445")], 0.5, 0, (x, y) => {
+		const thisCell = grid[x][y];
+
+		Element.affectAllNeighbors(x, y, (X, Y) => {
+			const cell = grid[X][Y];
+			let reference = cell.id;
+			
+			if(!Element.isTypes(X, Y, RADIATION_RESISTANT) && thisCell.acts < 1){
+				Element.setCell(X, Y, TYPES.RADIUM_GEM);
+				const change = Random.bool() ? -1 : 1;
+				if (!RADIUM_GEM_RESISTANT.has(reference+change)) {
+					grid[X][Y].reference = (reference+change) % ELEMENT_COUNT;
+				}else{
+					grid[X][Y].reference = reference;
+				}
+			}
+		});
+		thisCell.acts++;
+		if (thisCell.acts > 5) {
+			Element.dereference(x, y);
+		}
+		Element.updateCell(x, y);
+	}, (x, y) => null, true),
+
 
 	[TYPES.IRON]: new Element(1, (x, y) => {
 		const angle = Math.PI * .9
@@ -3536,6 +3866,42 @@ const DATA = {
 	}, (x, y) => {
 		Element.trySetCell(x, y - 1, Random.bool(.6) ? (Random.bool(.2) ? TYPES.ASH : TYPES.SMOKE) : TYPES.STEAM);
 	}),
+
+	[TYPES.CONWAY_ALIVE]: new Element(1, new Color(255, 255, 255, 1), 0.99, 0, (x, y) => {
+		const cell = grid[x][y];
+		if (simFrameCount % 2 === 0) {
+			const arr = Element.getNeighborsOfType(x, y, TYPES.CONWAY_ALIVE);
+			cell.acts = arr.reduce((a, b) => a + b);
+		}else {
+			const survivalRules = [false, false, true, true, false, false, false, false];
+			let acts = cell.acts;
+			Element.setCell(x, y, survivalRules[acts] ? TYPES.CONWAY_ALIVE : TYPES.CONWAY_DEAD);
+			cell.acts = acts;
+		}
+		Element.updateCell(x, y);
+	}, (x, y) => null, true),
+	
+	[TYPES.CONWAY_DEAD]: new Element(1, new Color(0, 0, 0, 1), 0, 1, (x, y) => {
+		const cell = grid[x][y];
+		if (simFrameCount % 2 === 0) {
+			const arr = Element.getNeighborsOfType(x, y, TYPES.CONWAY_ALIVE);
+			cell.acts = arr.reduce((a, b) => a + b);
+		}else {
+			const survivalRules = [false, false, false, true, false, false, false, false];
+			let acts = cell.acts;
+			Element.setCell(x, y, survivalRules[cell.acts] ? TYPES.CONWAY_ALIVE : TYPES.CONWAY_DEAD);
+			cell.acts = acts;
+		}
+		if ((Random.bool(Math.max(Random.perlin2D(x, y, .3), 0.005)))) {
+			if (Element.react(x, y, TYPES.AIR, TYPES.CONWAY_DEAD)) {
+				synthSoundEffects.bahhumSound.frequency++;
+				Element.updateCell(x, y);
+			}
+		} 
+	}, (x, y) => {
+		Element.setCell(x, y, TYPES.CONWAY_ALIVE);
+		return true;
+	}, true),
 
 	[TYPES.DAMP_SOIL]: new Element(1, freqColoring([
 		["#34292c", 35],
@@ -4022,16 +4388,23 @@ const DATA = {
 				const ox = x + Math.round(vel.x * i);
 				const oy = y + Math.round(vel.y * i);
 				if (ox === x && oy === y) continue;
-
+				
+				// if (Element.isTypes(ox, oy, GROUND)){
+				// 	Element.dereference(x, y);
+				// 	cell.acts = 1000;
+				// 	blocked = true;
+				// 	break;
+				// }
 				if (!Element.isEmptyReference(ox, oy, ELECTRICITY_PASSTHROUGH)) {
 					blocked = true;
 					break;
 				}
-				if (!Element.isType(ox, oy, TYPES.ELECTRICITY)) {
+				if (!Element.isType(ox, oy, TYPES.ELECTRICITY) /* && !blocked */) {
 					Element.setCellId(ox, oy, TYPES.ELECTRICITY);
 					grid[ox][oy].acts = 1;
 					grid[ox][oy].vel.mul(0);
 				}
+				
 				lx = ox;
 				ly = oy;
 			}
@@ -4333,6 +4706,28 @@ const DATA = {
 
 						}
 					}
+				} else if(Element.isType(ox, oy, TYPES.SAND)){
+					Element.setCell(ox, oy, TYPES.LIGHTNING);
+					grid[ox][oy].reference = TYPES.GLASS;
+					if (i < len - 1) {
+						grid[ox][oy].acts++;
+
+						if (Random.bool(0.1)) {
+							// console.log("split");
+							if (Element.isEmpty(x - dx * i, y + i, LIGHTNING_PASSTHROUGH)) {
+								console.log(typeName(grid[x - dx * i][y + i].id));
+								grid[x - dx * i][y + i].id = TYPES.LIGHTNING;
+							}
+							// Element.setCellId(x - dx * i, y + i, TYPES.LIGHTNING, LIGHTNING_PASSTHROUGH);
+							// Element.setCellId(x + dx * i, y + i, TYPES.LIGHTNING, LIGHTNING_PASSTHROUGH);		
+							// const ox = x + Random.int(-5, 5);
+							// const oy = y + Random.int(-5, 5);
+							// if (Element.trySetCell(ox, oy, TYPES.LIGHTNING)) {
+							// 	grid[ox][oy].acts--;
+							// }
+
+						}
+					}
 				} else {
 					if (Element.inBounds(ox, oy)) {
 						const { id } = grid[ox][oy];
@@ -4355,11 +4750,17 @@ const DATA = {
 				// 	Element.trySetCell(x + dx * i, y + i, TYPES.LIGHTNING);
 				// }
 			}
-		} else if (cell.acts++ > 10)
-			Element.die(x, y);
+		} else if (cell.acts++ > 10){
+			if(cell.reference === TYPES.GLASS){
+				Element.dereference(x, y);
+			}else Element.die(x, y);
+		}
 
+		if(cell.reference === TYPES.GLASS){
+			cell.acts++;
+		}
 		Element.updateCell(x, y);
-	}),
+	}, (x, y) => null, true),
 
 	[TYPES.LIGHT_SAD]: new Element(1, new Color(20, 20, 20), 0.9, 0.001, (x, y) => {
 		Element.affectNeighbors(x, y, (ox, oy) => {
@@ -5095,6 +5496,7 @@ function handleInput() {
 		for (let x = 0; x < WIDTH; x++)
 		for (let y = 0; y < HEIGHT; y++) {
 			Element.setCell(x, y, TYPES.AIR);
+			// Element.dereference(x, y);
 			lastIds[x][y] = -1;
 		}
 		scene.main.removeElements(scene.main.getElementsWithScript(DYNAMIC_OBJECT));
@@ -5208,6 +5610,8 @@ function handleInput() {
 				else if (key === "4") brushType = 4;
 				else if (key === "5") brushType = 5;
 				else if (key === "6") brushType = 5;
+				else if (key === "[") brush = (brush - 1 + ELEMENT_COUNT) % ELEMENT_COUNT;
+				else if (key === "]") brush = (brush + 1 + ELEMENT_COUNT) % ELEMENT_COUNT;
 			} else {
 				if (key === "+") scene.camera.zoomIn(ZOOM_SENSITIVITY);
 				else if (key === "_") scene.camera.zoomOut(ZOOM_SENSITIVITY);
@@ -5221,6 +5625,11 @@ function handleInput() {
 		if (keyboard.justPressed(" ")) paused = !paused;
 		if (keyboard.justPressed("g")) RTX = !RTX;
 		if (keyboard.justPressed("s")) SELECTORS_SHOWN = !SELECTORS_SHOWN;
+		if (keyboard.justPressed("t")) {
+			renderOnVel = !renderOnVel;
+			forceRender = true;
+		}
+		
 
 		if (keyboard.pressed("Control")) {
 			if (mouse.pressed("Left"))
@@ -5298,12 +5707,15 @@ function stepSimulation(time) {
 	}
 }
 
+let renderOnVel = false;
+let forceRender = false;
+
 function stepGraphics() {
 	const col = new Color(0, 0, 0, 1);
 
 	for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
 		const chunk = chunks[i][j];
-		if (chunk.sleep && chunk.sleepNext)
+		if (chunk.sleep && chunk.sleepNext && !forceRender)
 			continue;
 
 		const cx = chunk.x * CHUNK;
@@ -5315,16 +5727,26 @@ function stepGraphics() {
 				continue;
 
 			const cell = grid[x][y];
-			if (cell.id !== lastIds[x][y]) {
+			if (cell.id !== lastIds[x][y] || forceRender || renderOnVel) {
 				col.red = cell.id;
 				const element = DATA[cell.id];
-				tex.setPixel(x, y, element.getColor(x, y));
+				if(renderOnVel){
+					let col2 = new Color(0,0,0,1);
+					col2.red = cell.vel.mag*50;
+					col2.blue = cell.acts*(255/8);
+					tex.setPixel(x, y, col2);
+				}else{
+					tex.setPixel(x, y, element.getColor(x, y));
+				}
+
 				col.red = cell.id;
 				idTex.setPixel(x, y, col);
 				lastIds[x][y] = cell.id;
 			}
 		}
 	}
+	if (forceRender) forceRender = false;
+
 }
 
 function stepSleeping() {
@@ -5686,18 +6108,20 @@ intervals.continuous(time => {
 		
 		const singleStep = keyboard.justPressed("Enter");
 		//just a added script, if shift and enter is pressed then the sim will just constantly run even when paused
-		const stepping = keyboard.pressed("Shift") &&  keyboard.pressed("Enter");
+		const stepping = keyboard.pressed("Shift") && keyboard.pressed("Enter");
 
 		const simStep = !paused || singleStep || stepping;
 		if (simStep) {
 			//cell sim step
 			stepSimulation(time);
+			simFrameCount++;
 			//particle sim step
 			stepParticles();
 		}
 		
 		stepGraphics();
-		stepParticleGraphics();
+		if (!renderOnVel)
+			stepParticleGraphics();
 		extractDynamicBodies(); // also displays them
 		
 		if (simStep) stepSleeping();
@@ -5711,18 +6135,20 @@ intervals.continuous(time => {
 		if (!SELECTORS_SHOWN) {
 			let hoveredElementType = TYPES.AIR;
 			let hoveredElementActs = 0;
+			let hoveredElementRef = 0;
 			{
 				const coord = Vector2.floor(mouse.world.over(CELL));
 				if (Element.inBounds(coord.x, coord.y)) {
 					hoveredElementType = grid[coord.x][coord.y].id;
 					hoveredElementActs = grid[coord.x][coord.y].acts;
+					hoveredElementRef = DATA[hoveredElementType].reference ? grid[coord.x][coord.y].reference : 0;
 				}
 			};
 			
 			renderer.textMode = TextMode.TOP_LEFT;
-			text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, brushType: ${brushTypeName(brushType)} | ${brushType}, paused: ${paused}, RTX: ${RTX}, fps: ${intervals.fps}`, 10, 10);
+			text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, brushType: ${brushTypeName(brushType)} | ${brushType}, paused: ${paused}, RTX: ${RTX}, VelRender: ${renderOnVel}, fps: ${intervals.fps}`, 10, 10);
 			renderer.textMode = TextMode.TOP_RIGHT;
-			text(Font.Arial15, hoveredElementType ? typeName(hoveredElementType) + (hoveredElementActs ? " (" + hoveredElementActs + ")" : "") : "", width - 10, 10);
+			text(Font.Arial15, hoveredElementType ? typeName(hoveredElementType) + (hoveredElementActs ? " (" + hoveredElementActs + ")" : "") + (hoveredElementRef ? " {" + typeName(hoveredElementRef) + "}" : "") : "", width - 10, 10);
 		}
 	// } catch (err) {
 	// 	alert(err + "\n" + err.stack);
