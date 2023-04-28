@@ -3979,7 +3979,7 @@ const DATA = {
 		
 		Element.affectAllNeighbors(x, y, (ox, oy) => {
 			if (Element.isEmpty(ox, oy, LIQUID_PASSTHROUGH) && !Element.isType(ox, oy, TYPES.TERMITE)) {
-				if (Random.bool(0.01) | (grid[x][y].acts == 1 & Random.bool(0.05))){ //normal chance = 0.001
+				if (Random.bool(0.001) | (grid[x][y].acts == 1 & Random.bool(0.05))){ //normal chance = 0.001
 					makeCircle(x, y, TYPES.TERMITE, 2, 0.01, WATER_PASSTHROUGH);
 					grid[x][y].acts = 0;
 				}
