@@ -30,10 +30,10 @@ const controls = {
 canvas.clearScreen = () => renderer.fill(Color.BLACK);
 
 const TYPES = Object.fromEntries([
-	"AIR",
-	"TEST", "URANIUM", "ORANGEJUICE", "POWDER", "OXYGEN", "BURNING_BRICKS", "COPPER_BRICKS",
+	"AIR", "ANGLE_TESTER",
+	"TEST", "ANT_ACT_TESTER", "URANIUM", "ORANGEJUICE", "POWDER", "OXYGEN", "BURNING_BRICKS", "COPPER_BRICKS",
 	"THICKET_SEED", "THICKET", "THICKET_BUD", "THICKET_STEM", "INCENSE_SMOKE", "INCENSE",
-	"SUNFLOWER_PETAL", "SUNFLOWER_STEM", "SUNFLOWER_SEED",
+	"SUNFLOWER_PETAL", "SUNFLOWER_STEM", "SUNFLOWER_SEED", "TREE_GROWER",
 	"SOIL", "DAMP_SOIL", "ROOT", "GRASS", "FLOWER",
 	"HIGH_EXPLOSIVE", "EXPLOSIVE", "EXPLOSIVE_DUST", "FLASH_PAPER", "WET_PAPER",
 	"STONE", "CONDENSED_STONE", "MARBLE", "GRANITE", "MEDUSAS_GEM", "CARO_GEM",
@@ -45,9 +45,9 @@ const TYPES = Object.fromEntries([
 	"EXOTHERMIA", "FIRE", "BLUE_FIRE", "SPIRAL_FIRE", "BOUNCE_BEAM", "BOUNCE_GREEN_BEAM",
 	"BAHHUM", //"GREEK_FIRE",
 	"ESTIUM", "ESTIUM_GAS",
-	"DDT", 
-	"ANT", "DAMSELFLY", "MINNOW", "MITE", "LIGHTNING_BUG", "BEE",
-	"HIVE", "HONEY", "SUGAR",
+	"DDT", "ANT_TESTER",
+	"ANT", "DAMSELFLY", "MINNOW", "MITE", "LIGHTNING_BUG", "BEE", "TERMITE", "ANT_HILL",
+	"HIVE", "HONEY", "SUGAR", "CARMEL",
 	"WATER", "POND_WATER", "ICE", "SNOW", "STAINED_SNOW", "SALT", "SALT_WATER",
 	"SAND", "KELP", "KELP_TOP", "PNEUMATOCYST",
 	"COTTON", "DYED_COTTON",
@@ -69,7 +69,7 @@ const TYPES = Object.fromEntries([
 	"BLOOD", "MUSCLE", "BONE", "BONE_DUST", "EPIDERMIS", "INACTIVE_NEURON", "ACTIVE_NEURON", "CEREBRUM",
 	"CORAL", "DEAD_CORAL", "ELDER_CORAL", "PETRIFIED_CORAL", "COMPRESSED_CORAL", "DEAD_COMPRESSED_CORAL", 
 	"CORAL_STIMULANT", "CORAL_PRODUCER", "CORAL_CONSUMER", "GHOST_CORAL", "CORPOREAL_CORAL",
-	"FLUORESCENCE", "DORMANT_FLUORESCENCE"
+	"FLUORESCENCE", "DORMANT_FLUORESCENCE", "SCREEN_WIPE"
 ].map((n, i) => [n, i]));
 
 const ELEMENT_COUNT = Object.keys(TYPES).length;
@@ -1139,7 +1139,10 @@ class Element {
 		if (Element.inBounds(x, y)) {
 			let id = grid[x][y].id;
 			if (DATA[id].reference) {
-				if (set.has(id)) return true;
+				// if (grid[x][y].reference === TYPES.AIR) {
+				// 	return false;
+				// }
+				if (set.has(id)) return true; // this line doesn't really do anything, is this meant to have the reference id?
 				id = grid[x][y].reference;
 			}
 			return set.has(id);
@@ -1326,7 +1329,7 @@ const GLAZE_TYPES = new Set([TYPES.GLAZE_BASE, TYPES.DECUMAN_GLAZE])
 const ANT_UNSTICKABLE = new Set([TYPES.GENDERFLUID, TYPES.COPPER, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.IRON, TYPES.LIQUID_IRON, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.MUSCLE, ...WATER_TYPES]);
 const CONDUCTIVE = new Set([TYPES.COPPER_BRICKS, TYPES.GENDERFLUID, TYPES.LIGHT_SAD, TYPES.COPPER, TYPES.GOLD, TYPES.AUREATE_DUST, TYPES.LIQUID_GOLD, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.IRON, TYPES.CONWAY_DEAD, TYPES.MUSCLE, ...WATER_TYPES]);
 const ELECTRICITY_PASSTHROUGH = new Set([...CONDUCTIVE,TYPES.GERMANIUM, TYPES.ELECTRICITY, TYPES.CONWAY_ALIVE]);
-const SUGARY = new Set([TYPES.SUGAR, TYPES.HONEY]);
+const SUGARY = new Set([TYPES.SUGAR, TYPES.HONEY, TYPES.CARMEL]);
 const COLD = new Set([...WATER_TYPES, ...GLAZE_TYPES, TYPES.ICE, TYPES.BLOOD, TYPES.ESTIUM, TYPES.HONEY]);
 const SOIL_TYPES = new Set([TYPES.DAMP_SOIL, TYPES.SOIL]);
 const GRASS_ROOTABLE = new Set([...SOIL_TYPES, ...WATER_TYPES]);
@@ -1341,7 +1344,7 @@ const THICKETS = new Set([TYPES.THICKET, TYPES.INCENSE, TYPES.THICKET_BUD, TYPES
 const ACID_IMMUNE = new Set([TYPES.ACID, TYPES.GLASS, TYPES.GHOST_CORAL, TYPES.BOUNCE_BEAM, TYPES.BOUNCE_GREEN_BEAM]);
 const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL, TYPES.CORPOREAL_CORAL, TYPES.COMPRESSED_CORAL])
 const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL, TYPES.GHOST_CORAL, TYPES.DEAD_COMPRESSED_CORAL])
-const INSECT = new Set([TYPES.BEE, TYPES.ANT, TYPES.DAMSELFLY, TYPES.MITE, TYPES.LIGHTNING_BUG]);
+const INSECT = new Set([TYPES.BEE, TYPES.ANT, TYPES.DAMSELFLY, TYPES.MITE, TYPES.LIGHTNING_BUG, TYPES.TERMITE]);
 const CREATURE = new Set([...INSECT, TYPES.MINNOW])
 const BEE_BUILDABLE = new Set([TYPES.SUNFLOWER_STEM, TYPES.HIVE])
 const MITE_EATABLE_DEFENDING = new Set([TYPES.BEE, TYPES.ANT, TYPES.HIVE])
@@ -1353,9 +1356,12 @@ const GHOST_CORAL_REACT = new Set(Object.values(TYPES));
 const GROUND = new Set([TYPES.STONE, TYPES.CONDENSED_STONE, TYPES.MARBLE]);
 
 const LIGHTNING_PASSTHROUGH = new Set([...LIQUID_PASSTHROUGH, TYPES.SAND]);
+const CONWAY = new Set([TYPES.CONWAY_ALIVE, TYPES.CONWAY_DEAD])
+const TERMITES = new Set([TYPES.ANT_HILL, TYPES.TERMITE]);
+const TERMITE_FOOD = new Set([...SUGARY, ...CORAL_ON, TYPES.CORAL_STIMULANT, TYPES.BONE, TYPES.BONE_DUST, TYPES.SUNFLOWER_SEED]);
+const TERMITE_EATABLE = new Set([...TERMITE_FOOD, TYPES.WOOD, TYPES.COTTON, TYPES.DYED_COTTON, TYPES.SOIL, ...MEATY, TYPES.SAND, TYPES.SUNFLOWER_PETAL]);
 
-const RADIUM_GEM_RESISTANT = new Set([TYPES.BAHHUM, TYPES.TERMINATOR]);
-
+const RADIUM_SKIP = new Set([TYPES.BAHHUM, TYPES.TERMINATOR, ...CONWAY])
 
 GHOST_CORAL_UNREACTIVE.delete(TYPES.CORAL_STIMULANT);
 GHOST_CORAL_REACT.delete(TYPES.PARTICLE);
@@ -1366,12 +1372,14 @@ const URANIUM_PASSTHROUGH = new Set(Object.values(TYPES));
 URANIUM_PASSTHROUGH.delete(TYPES.URANIUM);
 
 const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR, TYPES.AIR]);
-const HEAT = new Set([TYPES.FIRE,TYPES.BLUE_FIRE,TYPES.LAVA,TYPES.POWER_LAVA,TYPES.EXOTHERMIA]);
+const HEAT = new Set([TYPES.FIRE,TYPES.BLUE_FIRE, TYPES.SPIRAL_FIRE, TYPES.MAGNESIUM_FIRE,TYPES.LAVA,TYPES.POWER_LAVA,TYPES.EXOTHERMIA]);
 const FIRE_TYPES = new Set([TYPES.FIRE,TYPES.BLUE_FIRE, TYPES.SPIRAL_FIRE, TYPES.MAGNESIUM_FIRE]);
 
 const GREEN_BEAM_PASSTHROUGH = new Set([...GAS_PASSTHROUGH, TYPES.BOUNCE_BEAM, TYPES.BOUNCE_GREEN_BEAM])
 
 const GERMANIUM_PASSTHROUGH = new Set([TYPES.GERMANIUM]);
+
+// const OVERWRITEABLE = new Set([TYPES.CONWAY_DEAD, TYPES.AIR, TYPES.ELECTRICITY])
 
 function updatePixel(x, y) {
 	tex.setPixel(x, y, DATA[grid[x][y].id].getColor(x, y));
@@ -1742,6 +1750,8 @@ function makeCircle(x, y, id, r = 10, chance = 0.2, passthrough = undefined) {
 	}
 }
 
+
+
 function makeLine(x, y, x1, y1, id, r = 10, chance = 0.2, passthrough = undefined) {
 	const minX = Math.min(x, x1) - r;
 	const minY = Math.min(y, y1) - r;
@@ -1842,6 +1852,130 @@ function flag(colors) {
 
 //up down left right, top right, top left, bottom right, bottom left
 const directionArray = [[0,1],[0,-1],[-1,0],[1,0],[1,1],[-1,1],[1,-1],[-1,-1]];
+
+const timeConversionAmount = 1;
+const pheromoneAge = 5000;
+const maxPheromoneAge = 5000; 
+let points = 0;
+
+function readBitfield(field, index, size) {
+	return (field >> index) & ((1 << size) - 1);
+}
+
+function antBytePlacer(toHome, toFood, toHomeValue = 0, toFoodValue = 0){ //note they pass in the array
+	let out = 0;
+	let time = simFrameCount/timeConversionAmount;
+	time = Math.min(0xffff >> 1, time);
+	toHomeTime = time << 1;
+	toFoodTime  = time << 17;
+	out |= (toHome) ? toHomeTime | (+toHome) : (toHomeValue << 1);
+	out |= (toFood) ? toFoodTime | ((+toFood) << 16) : (toFoodValue << 16);
+	// out = toHomeTime | toFoodTime | (+toHome) | ((+tosFood) << 16);
+	return out;
+}
+
+function antBytePlacerNew(toHome, toFood, toHomePherArr = [0, 0], toFoodPherArr = [0, 0]){ //note they pass in the array
+	let out = 0;
+	let time = simFrameCount/timeConversionAmount ;
+	time = Math.min(0xffff >> 1, time);
+	
+	//why not make the 16 bit chunk then shift it over at the end
+	let toFoodTime  = (((toFood) ? time : Math.min(0xffff >> 1, toFoodPherArr[0])) << 1) | (toFood ? 1 : toFoodPherArr[1]);//this is 17 because time is stored as 15 bits (made via the math.min above), actually
+	out |= toFoodTime << 16;
+	// out <<= 16;
+
+	let toHomeTime  = (((toHome) ? time :  Math.min(0xffff >> 1, toHomePherArr[0])) << 1) | (toHome ? 1 : toHomePherArr[1]);//this is 17 because time is stored as 15 bits (made via the math.min above), actually
+	out |= toHomeTime;
+	
+	
+	// out = toHomeTime | toFoodTime | (+toHome) | ((+tosFood) << 16);
+	
+	return out;
+}
+
+function antBytePaser(binary){
+	//1111 1111 1111 1111
+	//1111 1111 1111 1111
+
+	//0000 0000 0000 0000
+
+	//right most digit is the "activator"
+	//everything else is time
+	//of the 2 bytes for storage
+
+	// let toHome = binary & 0xffff;
+	// let toFood = (binary >> 16) & 0xffff;
+
+	let toHome = readBitfield(binary, 0, 16);
+	let toFood = readBitfield(binary, 16, 16);
+	// if (toHome & 1){
+		let isActiveHome = toHome & 1;
+		toHome >>= 1;
+		toHome *= timeConversionAmount;
+		
+	// } else toHome = 0;
+
+	// if (toFood & 1){
+		let isActiveFood = toFood & 1;
+		
+		toFood >>= 1;
+		toFood *= timeConversionAmount;
+	// } else toFood = 0;
+	return [[toHome,isActiveHome], [toFood, isActiveFood]];
+}
+
+const maxValue = 100000
+
+
+function antPheromoneValue(pheromoneArr, currTime = simFrameCount){
+	if (!pheromoneArr[1]) return 0; //if it is not active
+
+	let tDiff = currTime - (pheromoneArr[0]);
+	tDiff = Math.max(1, Math.min(1000000, tDiff));
+	// if (tDiff > maxPheromoneAge) {
+	// 	return 0;
+	// }
+
+	let score = maxValue - (tDiff) * pheromoneAge;
+	// let score  = 1/(Math.round(tDiff)+1) * pheromoneAge
+	score = Math.max(0, Math.min(1000000, score));
+
+	return score;
+	// if (time == 0 || time > 10000) {
+	// 	return 0;
+	// }
+	// const tDiff = currTime - time;
+	// let value = -tDiff + 10000; //temp equation
+	// value = Math.max(Math.min(value, 10000), 0);
+	// return value;
+}
+
+const toHomeWeight = 3;
+const toFoodWeight = 3;
+
+
+const antCheck = (x, y, angle, vel, isWandering = true) =>{
+	let delta = vel.rotated(angle);
+	let checkedCell = relGridGet(x, y, delta)
+	if (checkedCell.id != TYPES.AIR) return -1;
+	// console.log("acts please not be zero: "+checkedCell.acts);
+	let pheromones = antBytePaser(checkedCell.acts);
+	return antPheromoneValue((isWandering) ? pheromones[1] : pheromones[0]) * 5000; //the 5000 shouldn't actually need to be here at all... 
+	//this will return toHome strength if isWandering is set to false
+
+	//maybe do a weighted check, that way the returning ones follow a path too? 
+	// strength += (!isWandering) ? antPheromoneValue(pheromones[0]) : 0;
+	// strength += (isWandering) ? antPheromoneValue(pheromones[1]): 0; 
+	// return(strength);
+};
+
+const relGridGet = (x, y, vector) => {
+	if (Element.isEmpty(x + Math.round(vector.x), y + Math.round(vector.y)))
+	return grid[x + Math.round(vector.x)][y + Math.round(vector.y)];
+	else return grid[x][y];
+};
+
+let antTestingValue = -65536; 
 
 const DATA = {
 	[TYPES.AIR]: new Element(0, Color.BLANK),
@@ -2040,12 +2174,7 @@ const DATA = {
 				// let germID = grid[x][y].id;
 				Element.setCell(x,y,TYPES.ACTIVE_GERMANIUM);
 				let positionArr = [ox-x,oy-y];
-				for (let index = 0; index < directionArray.length; index++) {
-					const element = directionArray[index];
-					if(element[0]==positionArr[0] && element[1]==positionArr[1]){
-						grid[x,y].acts = index;
-					}
-				}
+				grid[x][y].vel = new Vector2(ox-x,oy-y).mul(-1);
 				// grid[x,y].acts = directionArray.findIndex([ox-x,oy-y]);
 				Element.die(ox, oy);
 				reacted = true;
@@ -2054,40 +2183,37 @@ const DATA = {
 	}),
 
 	[TYPES.ACTIVE_GERMANIUM]: new Element(0,(x,y)=>{
-		return Color.alpha(new Color("#4287f5"),1);
+		return Color.alpha(new Color("#0062ff"), 0.75);
 	},0.4,0,(x,y)=>{
 
 
 		let cell = grid[x][y];
-		let moveArr;
-		if(cell.acts >= 1 && cell.acts <=8){
-			// console.log("normal move triggered: acts:"+cell.acts);
-			moveArr = directionArray[cell.acts-1];
-		}else{
-			// console.log("rando triggered");
-			let randomValue = Math.trunc(Random.range(1, 9));
-			cell.acts = randomValue;
-			// console.log("act: "+cell.acts+"\n randomValue: "+randomValue);
-			moveArr = directionArray[randomValue-1];
+		if (cell.vel.mag == 0) {
+			cell.vel = new Vector2(Random.int(-1,1), Random.int(-1,1));
 		}
-		const thisAct = cell.acts; 
+		
+		if (!Element.tryMove(x,y,x+ cell.vel.x,y+ cell.vel.y,GERMANIUM_PASSTHROUGH)) {
+			Element.setCell(x,y,TYPES.ELECTRICITY);
+			grid[x][y].reference = TYPES.GERMANIUM;
+		}
+
 		// console.log("made move arr: "+moveArr);
 		// if(Element.isType(x+moveArr[0],y+moveArr[1],TYPES.GERMANIUM)){
 		// 	console.log("germanium detected");
 		// }
-		let hasMoved = Element.tryMove(x,y,x+moveArr[0],y+moveArr[1],GERMANIUM_PASSTHROUGH);
-		// console.log("moved : "+cell.acts);
+		// let hasMoved = Element.tryMove(x,y,x+moveArr[0],y+moveArr[1],GERMANIUM_PASSTHROUGH);
+		// // console.log("moved : "+cell.acts);
 
-		if(!hasMoved){
-			// console.log("generating elec");
-			Element.setCell(x,y,TYPES.ELECTRICITY);
-			// console.log("elec made");
-			grid[x][y].reference = TYPES.GERMANIUM;
-		}else{
-			// console.log("changing refrence");
-			grid[x+moveArr[0]][y+moveArr[1]].acts = thisAct;
-			Element.setCell(x,y,TYPES.GERMANIUM);
-		}
+		// if(!hasMoved){
+		// 	// console.log("generating elec");
+		// 	Element.setCell(x,y,TYPES.ELECTRICITY);
+		// 	// console.log("elec made");
+		// 	grid[x][y].reference = TYPES.GERMANIUM;
+		// }else{
+		// 	// console.log("changing refrence");
+		// 	grid[x+moveArr[0]][y+moveArr[1]].acts = cell.acts;
+		// 	Element.setCell(x,y,TYPES.GERMANIUM);
+		// }
 		// Element.move(x,y,x+1,y+1);
 		// move through germanium in the direction shown then at the end it will turn into electricity and reconstruct
 		// also what about a element that reacts to electricty by replacing it creating a trail
@@ -2597,7 +2723,7 @@ const DATA = {
 		return Color.lerp(c, new Color("#00000001"), .5);
 	}, 0.4, 0.04, (x, y) => {
 		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
-			if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 400;
+			// if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 400;
 			if (Element.isTypes(ox, oy, CORAL_ON) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = Math.min(100, grid[ox][oy].acts--);
 		})
 		if (grid[x][y].acts <= 0) Element.setCell(x, y, TYPES.GHOST_CORAL);
@@ -3000,7 +3126,10 @@ const DATA = {
 		["#785d42", 45],
 		["#8c6e4f", 45],
 		["#ab836f", 1]
-	]), 0.2, 0, solidUpdate),
+	]), 0.2, 0.1, solidUpdate, (x, y) => {
+		// if (Random.bool(0.1)) Element.setCell(x, y, TYPES.CARMEL);
+		return true;
+	}),
 
 	[TYPES.SALT]: new Element(1, freqColoring([
 		["#ded7d5", 45],
@@ -3559,24 +3688,384 @@ const DATA = {
 		Element.affectAllNeighbors(x, y, (X, Y) => {
 			const cell = grid[X][Y];
 			let reference = cell.id;
-			
 			if(!Element.isTypes(X, Y, RADIATION_RESISTANT) && thisCell.acts < 1){
 				Element.setCell(X, Y, TYPES.RADIUM_GEM);
 				const change = Random.bool() ? -1 : 1;
-				if (!RADIUM_GEM_RESISTANT.has(reference+change)) {
+				if (!RADIUM_SKIP.has(reference+change)) {
 					grid[X][Y].reference = (reference+change) % ELEMENT_COUNT;
-				}else{
+				} else{
 					grid[X][Y].reference = reference;
 				}
 			}
 		});
+
 		thisCell.acts++;
+
 		if (thisCell.acts > 5) {
 			Element.dereference(x, y);
 		}
 		Element.updateCell(x, y);
 	}, (x, y) => null, true),
 
+	[TYPES.ANTMARKER]: new Element(0.1, (x, y) => {
+		return new Color("#838f91");
+	}, 0, 0, (x, y) => {
+		//if acts are empty then fill with hgih value
+		let cell = grid[x][y];
+		let toHome = readBitfield(cell.acts, 0, 16);
+		let toFood = readBitfield(cell.acts, 16, 16);
+		//the structure: tohome first, then to food
+		toHome -= 1;
+		toFood -= 1;
+		toHome |= 0xffff;
+		toFood |= 0xffff;
+		toFood <<= 16;
+		cell.acts = toHome | toFood;
+
+	}, (x, y) => {
+		return false;
+	}, true),
+
+	[TYPES.ANTSIM]: new Element(0, (x, y) => {
+		return Color.alpha(new Color("brown"), 0);
+	}, 1, 0.5, (x, y) => {
+		//okay simple testing
+		//all there is will be a two pheromone system
+		//sudo code time
+		//get grid reference to the cells the ant can see
+		//check if food
+		//get pheromone values for each
+		//compare them all
+		//move to most recent one
+		//place new marker
+		//
+
+		let getActsArray = (acts) => {
+			let toHome = readBitfield(acts, 0, 16);
+			let toFood = readBitfield(acts, 16, 16);
+			return [toHome, toFood];
+		}
+		let placeActsArray = (toHome, toFood) => {
+			toHome |= 0xffff;
+			toFood |= 0xffff;
+			toFood <<= 16;
+			return(toHome | toFood);
+		}
+		let cell = grid[x][y];
+
+	
+
+		
+
+	}),
+
+	[TYPES.TERMITE]: new Element(0, (x, y) => {
+		return Color.alpha(new Color("brown"), 0);
+	}, 1, 0.5, (x, y) => {
+		let AntEatenData = [false, 0, 0];
+		Element.affectNeighbors(x, y, (ox, oy) => {
+			if (Element.isTypes(ox, oy, TERMITE_EATABLE) && grid[x][y].acts == 0) {
+
+				if (Element.isTypes(ox, oy, TERMITE_FOOD) || Random.bool(0.05)) {
+					grid[x][y].acts = 1;
+					grid[x][y].vel.rotate(Math.PI)
+				}else{
+					grid[x][y].vel.rotate(Random.int(-1,1) * (Math.PI / 16))
+				}
+				Element.setCell(ox,  oy, TYPES.AIR);
+				AntEatenData = [true, ox, oy];
+			} 
+			if (Element.isType(ox, oy, TYPES.ANT_HILL) && grid[x][y].acts == 1){
+				// if (grid.acts == 1) {
+				grid[ox][oy].acts = 1;
+				points++;
+				console.log("food arrived! points: " + points);
+				// if (Random.bool(0.9)) {
+				// 	let pos = [x-Math.round(grid[x][y].vel.x), y-Math.round(grid[x][y].vel.y)]
+					// Element.setCell(x-Math.round(grid[x][y].vel.x), y-Math.round(grid[x][y].vel.y), TYPES.TERMITE);
+				// 	grid[pos[0]][pos[1]].vel = grid[x][y].vel;
+				// 	grid[pos[0]][pos[1]].vel.rotate(Math.pi)
+				// }
+				// if (Random.bool(0.9)) Element.setCell(x, y, TYPES.ANT_HILL) //ant hill grower
+				
+				grid[x][y].acts = 0;
+				grid[x][y].vel.rotate(Math.PI)
+				// return;
+			}
+		});
+		
+		let cell = grid[x][y];
+		let vel = cell.vel;
+		// if (cell.acts > 1) {
+		// 	cell.acts = 0;
+		// }
+		//startup checker
+		if(cell.vel.mag == 0) cell.vel = new Vector2(Random.int(-1,1), Random.int(-1,1));
+		// cell.vel.mag = 1;
+
+		// const relGridGet = (x, y, vector) => {
+		// 	if (Element.isEmpty(x + Math.round(vector.x), y + Math.round(vector.y)))
+		// 	return grid[x + Math.round(vector.x)][y + Math.round(vector.y)];
+		// 	else return grid[x][y];
+		// };
+
+		// const antCheck = (angle, isWandering = true) =>{
+		// 	let delta = vel.rotate(angle);
+		// 	let checkedCell = relGridGet(x, y, delta)
+		// 	if (checkedCell.id != TYPES.AIR) return 0;
+		// 	let strength = 0;
+		// 	let pheromones = antBytePaser(checkedCell.acts);
+
+		// 	strength += (!isWandering) ? antPheromoneValue(pheromones[0]) : 0;
+		// 	strength += (isWandering) ? antPheromoneValue(pheromones[1]) * 5: 1; 
+		// 	return(strength);
+		// };
+		//cell checker for pheromones
+
+		wandering = grid[x][y].acts == 0; //if not wandering then it is returning
+
+		let strengthL = antCheck(x, y, -Math.PI/4, vel, wandering);
+		let strengthF = antCheck(x, y, 0, vel, wandering);
+		let strengthR = antCheck(x, y, Math.PI/4, vel, wandering);
+
+		// const variableRando = 0.001;
+		const baseRando = 0.001; //when wandering
+		const angle = 25 * Math.PI / 180;
+
+		if (strengthF > strengthL && strengthF > strengthR) {
+			// console.log("rotate forward");
+			vel.rotate(0);
+		} else if (strengthR > strengthL){
+			// console.log("rotate right");
+			vel.rotate(angle);
+		} else if  (strengthR < strengthL) {
+			// console.log("rotate left");
+			vel.rotate(-(angle));
+		} else {//if (strengthF == strengthR && strengthF == strengthL && strengthF == 0) {
+			vel.rotate( (Random.bool(baseRando) && wandering) ? (Random.int(-1,1)) * (angle) : 0);
+		}
+
+		let checkedCell = relGridGet(x, y, vel)
+		let pheromones = antBytePaser(checkedCell.acts);
+		
+		let outAct;
+		if (wandering) {
+			// outAct = antBytePlacer(true, false, pheromones[0], pheromones[1])
+			outAct = antBytePlacerNew(true, false, pheromones[0], pheromones[1])
+		}else {
+			// outAct = antBytePlacer(false, true, pheromones[0], pheromones[1])
+			outAct = antBytePlacerNew(false, true, pheromones[0], pheromones[1])
+		}
+		if (AntEatenData[0]){
+			grid[AntEatenData[1]][AntEatenData[2]].acts = antBytePlacer(false, true);
+		}
+		// console.log("acts: " + outAct + "\tW? " + wandering);
+
+		let moved = Element.tryMove(x, y, x + Math.round(vel.x), y + Math.round(vel.y), SOLID_PASSTHROUGH, (x, y, fx, fy) => {
+			const t = grid[fx][fy];
+			grid[fx][fy] = grid[x][y];
+			if (vel.mag != 0 && t.id === TYPES.AIR) t.acts = outAct;
+			grid[x][y] = t;
+			Element.updateCell(x, y);
+			Element.updateCell(fx, fy);
+		});
+		
+		//TODO make the ants see perpendicular to where they are normally able to, or implement a way to have several relative things, a view cone
+
+		if (!moved) vel.rotate((Random.int(-1,1)) * angle);//(Math.PI/4)); //Math.PI/2)); //try reflecting the vel like an actual mirror, to make it mroe accurate
+		
+		// outAct = 0b1111;
+		// console.log(outAct + ": " + outAct.toString(2));
+		
+		if (moved && vel.mag != 0) {
+			grid[x][y].acts = outAct;
+		}
+
+		// if (moved && vel.mag != 0 && Random.bool(0.25)) {
+		// grid[x][y].acts = outAct;
+		// 	console.log(outAct);
+		// 	r = 2;
+		// 	for (let i = -r; i <= r; i++) {
+		// 		for (let j = -r; j <= r; j++) {
+		// 			if (i * i + j * j < r * r) {
+		// 				let ox = i + x - Math.round(vel.x);
+		// 				let oy = j + y - Math.round(vel.y);
+		// 				if (Element.inBounds(ox, oy) && !Element.isType(ox, oy, TYPES.TERMITE))
+		// 					if(Element.isType(ox, oy, TYPES.AIR)) grid[ox][oy].acts = outAct;
+		// 			}
+		// 		}
+		// 	}
+		// }
+		Element.updateCell(x, y);
+	}),
+
+
+	[TYPES.ANT_TESTER]: new Element(1, [new Color("red")], 1, 0.5, (x, y) => {
+		let cell = grid[x][y];
+		let vel = cell.vel;
+		if(cell.vel.mag == 0) cell.vel = new Vector2(Random.int(-1,1), Random.int(-1,1));
+		vel.mag = 1;
+		if (Random.bool(0.005)) vel.rotate((Random.bool(0.5) ? 1 : -1) * Math.PI/4);
+
+		// //need to create a byte reader and tester
+		// //so acts is a 32 bit integer
+		// //use programming calc to do this
+		// let kernelS = 0b11111111000000000000000000000000;
+		// vel.x = 1;
+		// //need to implement a in bounds check here
+		// if (Element.inBounds(x+vel.x, y)) {
+		// 	vel.y = (grid[x+vel.x][y].acts > 5) ? 10 : 0;
+		// }
+		vel.x = Math.round(vel.x);
+		vel.y = Math.round(vel.y);
+		Element.tryMove(x, y, x + vel.x, y + vel.y, LIQUID_PASSTHROUGH);
+		// console.log(simFrameCount.toString(2).length/8 + ":" + simFrameCount.toString(2) + "\t:" + simFrameCount);
+		
+		
+
+		Element.updateCell(x, y);
+		// grid[x][y].acts = 196,611;
+		grid[x][y].acts = 2,147,581,953
+		
+	}),
+
+	[TYPES.ANGLE_TESTER]: new Element(1, [new Color("red")], 1, 0.5, (x, y) => {
+		let vel = grid[x][y].vel;
+		while (vel.mag == 0) {
+			vel = new Vector2(Random.int(-1,1), Random.int(-1,1)); 
+		}
+		vel.mag = 1;
+		let delta = vel.rotated();
+		vel1 = vel.rotated(0);
+		Element.setCell(x + Math.round(vel1.x), y + Math.round(vel1.y), TYPES.GLASS);
+
+		vel2 = vel.rotated(Math.PI/4);
+		Element.setCell(x + Math.round(vel2.x), y + Math.round(vel2.y), TYPES.GLASS);
+
+		vel3 = vel.rotate(-Math.PI/4);
+		Element.setCell(x + Math.round(vel3.x), y + Math.round(vel3.y), TYPES.GLASS);
+
+		Element.setCell(x, y, TYPES.AIR);
+	}),
+
+	[TYPES.ANT_ACT_TESTER]: new Element(1, [new Color("red")], 1, 0.5, (x, y) => {
+		Element.setCell(x, y, TYPES.AIR);
+		grid[x][y].acts = antBytePlacer(true, true);
+		
+	}),
+
+	[TYPES.CARMEL]: new Element(0, [new Color("#993e11"), new Color("#8c480d")], 0.3, 0, (x, y) => {
+		Element.affectAllNeighbors(x, y, (ox, oy) => {
+			if (Element.isEmpty(ox, oy, LIQUID_PASSTHROUGH) && !Element.isType(ox, oy, TYPES.TERMITE)) {
+				// grid[ox][oy].acts = antBytePlacerNew(false, true);
+			}
+		})
+	}, (x, y) => {
+		// Element.setCell(x, y, TYPES.STEAM);
+		return true;
+	}),
+
+	[TYPES.ANT_HILL]: new Element(0, (x, y) => {
+		let colors = [new Color("brown"), new Color("red")]
+		const modify = (color) => {
+			color.brightness = (color.brightness) * (0.5)
+			return Color.alpha(color, 0);
+		}
+
+		
+		
+		return (Random.bool(.5) ? modify(new Color("brown")) : modify(new Color("red"))  );
+	}, 0.3, 0.01, (x, y) => {
+		
+		Element.affectAllNeighbors(x, y, (ox, oy) => {
+			if (Element.isEmpty(ox, oy, LIQUID_PASSTHROUGH) && !Element.isType(ox, oy, TYPES.TERMITE)) {
+				if (Random.bool(0.01) | (grid[x][y].acts == 1 & Random.bool(0.05))){ //normal chance = 0.001
+					makeCircle(x, y, TYPES.TERMITE, 2, 0.01, WATER_PASSTHROUGH);
+					grid[x][y].acts = 0;
+				}
+				else{
+					// grid[ox][oy].acts = antBytePlacerNew(true, false);
+					Element.updateCell(ox, oy);
+				}
+			}
+		})
+		Element.updateCell(x, y);
+	}, (x, y) => {
+		if (Random.bool(0.1)) explode(x, y, 3, 0.25);
+	}),
+
+	[TYPES.SCREEN_WIPE]: new Element(1, new Color(255, 0, 255), 0, 0, (x, y) => {
+
+		const num = 3;
+		
+		const maxItratIterations = Random.int(10,15) * num;
+		let cell = grid[x][y];
+		let acts = cell.acts;
+		if (acts == 0) {
+			cell.vel = new Vector2(Random.random()*2 - 1, Random.random()*2 - 1);
+		}
+		let radius = Math.round(num / (acts + 1));
+		cell.vel.mag = Math.max(radius * (num - 1), 1);
+		
+		const placeNext = (inVel) => {
+			let nextPosition = new Vector2(x + Math.round(inVel.x), y + Math.round(inVel.y));
+			if (Element.inBounds(nextPosition.x, nextPosition.y)) {
+				makeLine(x, y, nextPosition.x, nextPosition.y, TYPES.AIR, radius, 1, new Set([TYPES.SCREEN_WIPE]));
+				Element.setCell(nextPosition.x, nextPosition.y, TYPES.SCREEN_WIPE);
+				grid[nextPosition.x][nextPosition.y].acts = acts + 1;
+				grid[nextPosition.x][nextPosition.y].vel = inVel;
+				Element.updateCell(nextPosition.x, nextPosition.y);
+			}
+		}
+
+		const angle = (Math.PI / 4) / (acts + 1);
+
+		if (acts < maxItratIterations) {
+			const velocity = new Vector2(cell.vel.x, cell.vel.y);
+			placeNext(velocity.rotated(angle));
+			placeNext(velocity.rotated(-angle));
+		}
+		Element.setCell(x, y, TYPES.AIR);
+
+	}),
+
+	[TYPES.TREE_GROWER]: new Element(1, freqColoring([
+		["#4d483f", 9],
+		["#383632", 8],
+		["#6b6452", 5],
+		["#a39c8c", 2]
+	]), 0.5, 0.2, (x, y) => {
+
+		const maxItratIterations = Random.int(25,35);
+		let cell = grid[x][y];
+		let acts = cell.acts;
+		if (acts == 0) {
+			cell.vel = new Vector2(0, -1);
+		}
+		let radius = Math.round(5 / (acts + 1));
+		cell.vel.mag = Math.max(radius * 5, 1);
+		
+		const placeNext = (inVel) => {
+			let nextPosition = new Vector2(x + Math.round(inVel.x), y + Math.round(inVel.y));
+			if (Element.inBounds(nextPosition.x, nextPosition.y)) {
+				makeLine(x, y, nextPosition.x, nextPosition.y, TYPES.WOOD, radius, 1, new Set([TYPES.TREE_GROWER]));
+				Element.setCell(nextPosition.x, nextPosition.y, TYPES.TREE_GROWER);
+				grid[nextPosition.x][nextPosition.y].acts = acts + 1;
+				grid[nextPosition.x][nextPosition.y].vel = inVel;
+				Element.updateCell(nextPosition.x, nextPosition.y);
+			}
+		}
+
+		const angle = (Math.PI / 3) / (acts + 3);
+
+		if (acts < maxItratIterations) {
+			const velocity = new Vector2(cell.vel.x, cell.vel.y);
+			placeNext(velocity.rotated(angle));
+			placeNext(velocity.rotated(-angle));
+		}
+		Element.setCell(x, y, TYPES.WOOD);
+
+	}),
 
 	[TYPES.IRON]: new Element(1, (x, y) => {
 		const angle = Math.PI * .9
@@ -3990,6 +4479,7 @@ const DATA = {
 	}, (x, y) => {
 		Element.trySetCell(x, y - 1, Random.bool(.6) ? (Random.bool(.2) ? TYPES.ASH : TYPES.SMOKE) : TYPES.STEAM);
 	}),
+
 	[TYPES.FLOWER]: new Element(5, [Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RAZZMATAZZ, Color.RED, Color.SKY_BLUE, Color.CYAN, Color.LAVENDER, Color.MAGENTA, Color.PINK, Color.YELLOW, Color.WHITE, Color.ORANGE], 0.05, .07, (x, y) => {
 		let arr = Element.getNeighborsOfType(x, y, TYPES.GRASS)
 		if (arr[0] || arr[2] || arr[6]) Element.setCell(x, y, TYPES.GRASS);
@@ -4014,6 +4504,7 @@ const DATA = {
 			else Element.setCell(x, y - 1, TYPES.STEAM);
 		}
 	}),
+
 	[TYPES.WATER]: new Element(0, [new Color("#120a59"), new Color("#140960")], 0.4, 0.05, (x, y) => {
 		liquidUpdate(x, y, soundEffects.liquidSound, WATER_PASSTHROUGH);
 	}, (x, y) => {
@@ -4127,6 +4618,7 @@ const DATA = {
 		fluidUpdate(x, y, 1, GRAVITY, WATER_PASSTHROUGH);
 	}, (x, y) => {
 		Element.trySetCell(x, y - 1, TYPES.STEAM);
+		// Element.setCell(x, y, (Random.bool(0.80)) ?  TYPES.SUGAR : TYPES.CARMEL);
 		Element.setCell(x, y, TYPES.SUGAR);
 		return true;
 	}),
@@ -4198,6 +4690,7 @@ const DATA = {
 		if (Random.bool(.7)) Element.trySetCell(x, y - 1, Random.bool(.05) ? TYPES.ASH : TYPES.SMOKE);
 		Element.trySetCell(x, y - 1, Random.bool(.3) ? TYPES.MOLTEN_WAX : TYPES.HONEY);
 	}),
+
 	[TYPES.BEE]: new Element(2, [
 		new Color("#e8d207"), new Color("#ffe812"),
 		new Color("#f5e764"), new Color("#e6d42c"),
@@ -4629,7 +5122,7 @@ const DATA = {
 			let newID = grid[tx][ty].id;
 			do {
 				newID = (newID + change + ELEMENT_COUNT) % ELEMENT_COUNT;
-			} while (newID === TYPES.BAHHUM);
+			} while (RADIUM_SKIP.has(newID));//=== TYPES.BAHHUM);
 			Element.setCellId(tx, ty, newID);
 		} else Element.updateCell(x, y);
 	}),
@@ -5226,7 +5719,7 @@ let SELECTORS_SHOWN = true;
 let SETTINGS_SHOWN = false;
 
 const BRUSH_TYPES = Object.fromEntries([
-	"CIRCLE", "SQUARE", "RING", "FORCEFUL", "ROW", "COLUMN", "SELECT", "DUPLICATE",  "LINE"
+	"CIRCLE", "SQUARE", "RING", "FORCEFUL", "ROW", "COLUMN", "SELECT", "DUPLICATE",  "LINE", "UPDATE"
 ].map((v, i) => [v, i]));
 function brushTypeName(brushType) {
 	const name = Object.entries(BRUSH_TYPES)
@@ -5454,7 +5947,6 @@ function handleBrushInput() {
 						lineDrawingPoints = [];
 					}
 					if(keyboard.pressed("m")){
-						console.log("click");
 						for (let i = 0; i < lineDrawingPoints.length - 1; i++) {
 							handleLine(
 								...lineDrawingPoints[i].values,
@@ -5483,11 +5975,19 @@ function handleBrushInput() {
 							// console.log(mouse.world);
 							// console.log((Math.abs(ox-lastDrawingPoint[0]) < 5) + " | " + (Math.abs(oy-lastDrawingPoint[1]) < 5));
 						}// makeLine(oxl, oyl, oxl+10, oyl+10, TYPES.STONE, 5);
-						//apply
-						console.log("clack");
-						
+						//apply						
 					}
 				} break;
+
+				case BRUSH_TYPES.UPDATE: {
+					for (let i = -r; i <= r; i++) for (let j = -r; j <= r; j++) {
+						if (i * i + j * j < r * r) {
+							const x = i + ox;
+							const y = j + oy;
+							Element.updateCell(x, y);
+						}
+					}
+				}
 			}
 		}
 	}
@@ -5630,7 +6130,7 @@ function handleInput() {
 		if (keyboard.justPressed("g")) RTX = !RTX;
 		if (keyboard.justPressed("s")) SELECTORS_SHOWN = !SELECTORS_SHOWN;
 		if (keyboard.justPressed("t")) {
-			renderOnVel = !renderOnVel;
+			renderView = (renderView + 1) % renderViewCount;
 			forceRender = true;
 		}
 		
@@ -5712,14 +6212,18 @@ function stepSimulation(time) {
 }
 
 let renderOnVel = false;
+let renderAntTrail = false;
 let forceRender = false;
+
+let renderView = 0; //0 = normal, 1 = renderOnVel, 2 = renderAntTrail
+let renderViewCount = 3;
 
 function stepGraphics() {
 	const col = new Color(0, 0, 0, 1);
 
 	for (let i = 0; i < CHUNK_WIDTH; i++) for (let j = 0; j < CHUNK_HEIGHT; j++) {
 		const chunk = chunks[i][j];
-		if (chunk.sleep && chunk.sleepNext && !forceRender)
+		if (chunk.sleep && chunk.sleepNext && (!forceRender))
 			continue;
 
 		const cx = chunk.x * CHUNK;
@@ -5731,17 +6235,50 @@ function stepGraphics() {
 				continue;
 
 			const cell = grid[x][y];
-			if (cell.id !== lastIds[x][y] || forceRender || renderOnVel) {
+			if (cell.id !== lastIds[x][y] || forceRender || (renderView)) {
 				col.red = cell.id;
 				const element = DATA[cell.id];
-				if(renderOnVel){
-					let col2 = new Color(0,0,0,1);
-					col2.red = cell.vel.mag*50;
-					col2.blue = cell.acts*(255/8);
-					tex.setPixel(x, y, col2);
-				}else{
-					tex.setPixel(x, y, element.getColor(x, y));
+				let displayCol = new Color(0,0,0,0);
+				switch (renderView) {
+					case 1:
+						displayCol.red = cell.vel.mag*50;
+						displayCol.blue = (Math.abs(cell.acts))*(255/8);
+						displayCol = Color.lerp(displayCol, element.getColor(x, y), 0.3)
+						break;
+					case 2:
+						if(cell.acts != 0){
+							let pheromones = antBytePaser(cell.acts);
+							displayCol.red = antPheromoneValue(pheromones[1]) * toHomeWeight;
+							displayCol.blue = antPheromoneValue(pheromones[0]) * toFoodWeight;
+						}
+						if(cell.id == TYPES.TERMITE){
+							if (cell.acts == 1) {
+								displayCol.blue = 255;
+							}
+							displayCol.green = 255;
+						}
+						if(cell.id == TYPES.ANT_HILL) {
+							displayCol.blue = 255;
+							displayCol.green = 255;
+							displayCol.red = 255;
+						}else if (cell.id != TYPES.TERMITE) {
+							displayCol = Color.lerp(displayCol, element.getColor(x, y), 0.3)
+						}
+						break;
+					default:
+						displayCol = element.getColor(x, y)
+						break;
 				}
+				tex.setPixel(x, y, displayCol);
+				
+				// if(renderOnVel){
+				// 	let col2 = new Color(0,0,0,0);
+				// 	col2.red = cell.vel.mag*50;
+				// 	col2.blue = (Math.abs(cell.acts))*(255/8);
+				// 	tex.setPixel(x, y, col2);
+				// }else{
+				// 	tex.setPixel(x, y, element.getColor(x, y));
+				// }
 
 				col.red = cell.id;
 				idTex.setPixel(x, y, col);
@@ -5838,6 +6375,22 @@ function displayBrushPreview() {
 					if(lineDrawingPoints.length)
 						renderer.draw(Color.BLUE).circle(lineDrawingPoints.last.times(CELL), 2.5 / scene.camera.zoom);
 				break;
+			case BRUSH_TYPES.UPDATE:
+				renderer.stroke(...brushPreviewArgs).circle(mouse.world, cellBrushSize);
+
+				renderer.stroke(...brushPreviewArgs).rect(Rect.fromMinMax(
+					new Vector2(mouse.world.x + cellBrushSize/15, mouse.world.y - cellBrushSize/1.25),	
+					new Vector2(mouse.world.x - cellBrushSize/15, mouse.world.y - cellBrushSize/7.5)	
+				));
+				renderer.stroke(...brushPreviewArgs).rect(Rect.fromMinMax(
+					new Vector2(mouse.world.x + cellBrushSize/15, mouse.world.y + cellBrushSize/(10)),	
+					new Vector2(mouse.world.x - cellBrushSize/15, mouse.world.y + cellBrushSize/4)	
+				))
+				// renderer.textMode = TextMode.CENTER_CENTER;
+				// renderer.stroke(...brushPreviewArgs).text(Font.Arial80, "!", new Vector2(
+				// 	mouse.world.x,
+				// 	mouse.world.y,
+				// ));
 		}
 	});
 }
@@ -6103,6 +6656,9 @@ function updateSoundEffects() {
 	}
 }
 
+let debugAccuracy = 3;
+debugAccuracy = 10**debugAccuracy;
+
 intervals.continuous(time => {
 	// try {
 
@@ -6136,23 +6692,37 @@ intervals.continuous(time => {
 
 		updateSoundEffects();
 
+		
 		if (!SELECTORS_SHOWN) {
+			const coord =  Vector2.floor(mouse.world.over(CELL));
 			let hoveredElementType = TYPES.AIR;
 			let hoveredElementActs = 0;
 			let hoveredElementRef = 0;
+			let hoveredElementVelInfo = 0;
 			{
-				const coord = Vector2.floor(mouse.world.over(CELL));
 				if (Element.inBounds(coord.x, coord.y)) {
 					hoveredElementType = grid[coord.x][coord.y].id;
 					hoveredElementActs = grid[coord.x][coord.y].acts;
 					hoveredElementRef = DATA[hoveredElementType].reference ? grid[coord.x][coord.y].reference : 0;
+					hoveredElementVelInfo = Vector2.round(grid[coord.x][coord.y].vel.times(debugAccuracy)).over(debugAccuracy);
 				}
 			};
 			
 			renderer.textMode = TextMode.TOP_LEFT;
-			text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, brushType: ${brushTypeName(brushType)} | ${brushType}, paused: ${paused}, RTX: ${RTX}, VelRender: ${renderOnVel}, fps: ${intervals.fps}`, 10, 10);
+			text(Font.Arial20, `brush: ${typeName(brush)}, brushSize: ${brushSize}, brushType: ${brushTypeName(brushType)} | ${brushType}, paused: ${paused}, RTX: ${RTX}, RenderState: ${renderView}, fps: ${intervals.fps}`, 10, 10);
 			renderer.textMode = TextMode.TOP_RIGHT;
 			text(Font.Arial15, hoveredElementType ? typeName(hoveredElementType) + (hoveredElementActs ? " (" + hoveredElementActs + ")" : "") + (hoveredElementRef ? " {" + typeName(hoveredElementRef) + "}" : "") : "", width - 10, 10);
+			
+			if (keyboard.pressed("v")) {
+				renderer.textMode = TextMode.BOTTOM_LEFT;
+				text(Font.Arial15, 
+					(!Element.inBounds(coord.x, coord.y)) ? "" : "coords: " + coord +
+					((hoveredElementVelInfo) ? "\nVel Info: " + hoveredElementVelInfo + " m: " + Math.round(hoveredElementVelInfo.mag*debugAccuracy)/debugAccuracy : "") +
+					((hoveredElementActs) ? "\nActs: " + hoveredElementActs : "") + 
+					((hoveredElementActs) ? "\nto Home: " + Math.round( antPheromoneValue( antBytePaser(hoveredElementActs)[0] ) * debugAccuracy ) / debugAccuracy + "\t to Food:" +  Math.round( antPheromoneValue( antBytePaser(hoveredElementActs)[1] ) * debugAccuracy ) / debugAccuracy: "")
+					, 10, height - 10);	
+			}
+			
 		}
 	// } catch (err) {
 	// 	alert(err + "\n" + err.stack);
