@@ -24,16 +24,19 @@ const controls = {
 	"Shift + Arrow Keys & Control + Drag": "Move camera",
 	"Control + Click & Drag": "Move camera",
 	"g": "Toggle 'RTX'",
-	"a": "Animate Wall"
+	"a": "Animate Wall",
+	"v": "toggle debug view",
+	"n, m, & k": "(line brush) place, apply, clear (respectively)",
+	"t": "switch render view (normal, information, and ant views)"
 };
 
 canvas.clearScreen = () => renderer.fill(Color.BLACK);
 
 const TYPES = Object.fromEntries([
-	"AIR", "ANGLE_TESTER",
-	"TEST", "ANT_ACT_TESTER", "URANIUM", "ORANGEJUICE", "POWDER", "OXYGEN", "BURNING_BRICKS", "COPPER_BRICKS",
+	"AIR",
+	"TEST", //"URANIUM", "ORANGEJUICE", "POWDER", "OXYGEN", "BURNING_BRICKS", "COPPER_BRICKS",
 	"THICKET_SEED", "THICKET", "THICKET_BUD", "THICKET_STEM", "INCENSE_SMOKE", "INCENSE",
-	"SUNFLOWER_PETAL", "SUNFLOWER_STEM", "SUNFLOWER_SEED", "TREE_GROWER",
+	"SUNFLOWER_PETAL", "SUNFLOWER_STEM", "SUNFLOWER_SEED", "TREE_SEED", "TREE_GENERATOR", "LEAVES",
 	"SOIL", "DAMP_SOIL", "ROOT", "GRASS", "FLOWER",
 	"HIGH_EXPLOSIVE", "EXPLOSIVE", "EXPLOSIVE_DUST", "FLASH_PAPER", "WET_PAPER",
 	"STONE", "CONDENSED_STONE", "MARBLE", "GRANITE", "MEDUSAS_GEM", "CARO_GEM",
@@ -45,7 +48,7 @@ const TYPES = Object.fromEntries([
 	"EXOTHERMIA", "FIRE", "BLUE_FIRE", "SPIRAL_FIRE", "BOUNCE_BEAM", "BOUNCE_GREEN_BEAM",
 	"BAHHUM", //"GREEK_FIRE",
 	"ESTIUM", "ESTIUM_GAS",
-	"DDT", "ANT_TESTER",
+	"DDT",
 	"ANT", "DAMSELFLY", "MINNOW", "MITE", "LIGHTNING_BUG", "BEE", "TERMITE", "ANT_HILL",
 	"HIVE", "HONEY", "SUGAR", "CARMEL",
 	"WATER", "POND_WATER", "ICE", "SNOW", "STAINED_SNOW", "SALT", "SALT_WATER",
@@ -928,6 +931,19 @@ class Element {
 		];
 	}
 
+	static getNeighborsOfTypes(x, y, set) {
+		return [
+			Element.isTypes(x, y - 1, set),
+			Element.isTypes(x + 1, y - 1, set),
+			Element.isTypes(x + 1, y, set),
+			Element.isTypes(x + 1, y + 1, set),
+			Element.isTypes(x, y + 1, set),
+			Element.isTypes(x - 1, y + 1, set),
+			Element.isTypes(x - 1, y, set),
+			Element.isTypes(x - 1, y - 1, set)
+		];
+	}
+
 	static inBounds(x, y) {
 		return x >= 0 && y >= 0 && x < WIDTH && y < HEIGHT;
 	}
@@ -1346,9 +1362,9 @@ const CORAL_ON = new Set([TYPES.CORAL, TYPES.ELDER_CORAL, TYPES.CORPOREAL_CORAL,
 const CORAL_OFF = new Set([TYPES.DEAD_CORAL, TYPES.PETRIFIED_CORAL, TYPES.GHOST_CORAL, TYPES.DEAD_COMPRESSED_CORAL])
 const INSECT = new Set([TYPES.BEE, TYPES.ANT, TYPES.DAMSELFLY, TYPES.MITE, TYPES.LIGHTNING_BUG, TYPES.TERMITE]);
 const CREATURE = new Set([...INSECT, TYPES.MINNOW])
-const BEE_BUILDABLE = new Set([TYPES.SUNFLOWER_STEM, TYPES.HIVE])
+const BEE_BUILDABLE = new Set([TYPES.SUNFLOWER_STEM, TYPES.HIVE, TYPES.WOOD])
 const MITE_EATABLE_DEFENDING = new Set([TYPES.BEE, TYPES.ANT, TYPES.HIVE])
-const MITE_EATABLE = new Set([...MITE_EATABLE_DEFENDING, ...MEATY, ...THICKETS, ...SUGARY, ...CORAL_ON, ...SUNFLOWER, TYPES.DAMSELFLY, TYPES.MINNOW, TYPES.GRASS, TYPES.FLOWER, TYPES.ROOT])
+const MITE_EATABLE = new Set([...MITE_EATABLE_DEFENDING, ...MEATY, ...THICKETS, ...SUGARY, ...CORAL_ON, ...SUNFLOWER, TYPES.DAMSELFLY, TYPES.MINNOW, TYPES.GRASS, TYPES.FLOWER, TYPES.ROOT, TYPES.LEAVES])
 const ANTIMATTER_PASSTHROUGH = new Set([TYPES.AIR, TYPES.ANTIMATTER]);
 const CORALS = new Set([...CORAL_OFF, ...CORAL_ON, TYPES.CORAL_CONSUMER, TYPES.CORAL_PRODUCER, TYPES.CORAL_STIMULANT]);
 const GHOST_CORAL_UNREACTIVE = new Set([...CORALS, TYPES.GLASS, ...CONVEYOR_RESISTANT, TYPES.AIR]);
@@ -1359,7 +1375,7 @@ const LIGHTNING_PASSTHROUGH = new Set([...LIQUID_PASSTHROUGH, TYPES.SAND]);
 const CONWAY = new Set([TYPES.CONWAY_ALIVE, TYPES.CONWAY_DEAD])
 const TERMITES = new Set([TYPES.ANT_HILL, TYPES.TERMITE]);
 const TERMITE_FOOD = new Set([...SUGARY, ...CORAL_ON, TYPES.CORAL_STIMULANT, TYPES.BONE, TYPES.BONE_DUST, TYPES.SUNFLOWER_SEED]);
-const TERMITE_EATABLE = new Set([...TERMITE_FOOD, TYPES.WOOD, TYPES.COTTON, TYPES.DYED_COTTON, TYPES.SOIL, ...MEATY, TYPES.SAND, TYPES.SUNFLOWER_PETAL]);
+const TERMITE_EATABLE = new Set([...TERMITE_FOOD, TYPES.COTTON, TYPES.DYED_COTTON, ...MEATY, TYPES.SAND, TYPES.SUNFLOWER_PETAL]);
 
 const RADIUM_SKIP = new Set([TYPES.BAHHUM, TYPES.TERMINATOR, ...CONWAY, TYPES.SCREEN_WIPE, TYPES.AIR])
 
@@ -1752,7 +1768,7 @@ function makeCircle(x, y, id, r = 10, chance = 0.2, passthrough = undefined) {
 
 
 
-function makeLine(x, y, x1, y1, id, r = 10, chance = 0.2, passthrough = undefined) {
+function makeLine(x, y, x1, y1, id, r = 10, chance = 0.2, passthrough = ALL_PASSTHROUGH) {
 	const minX = Math.min(x, x1) - r;
 	const minY = Math.min(y, y1) - r;
 	const maxX = Math.max(x, x1) + r;
@@ -1762,7 +1778,7 @@ function makeLine(x, y, x1, y1, id, r = 10, chance = 0.2, passthrough = undefine
 		const p = new Vector2(i, j);
 		if (Element.inBounds(i, j) && line.distanceTo(p) < r) {
 			if(id === "explode") explode(i, j, 1)
-			else Element.setCell(i, j, id);
+			else Element.trySetCell(i, j, id, passthrough);
 		}
 	}
 }
@@ -1924,7 +1940,7 @@ function antBytePaser(binary){
 	return [[toHome,isActiveHome], [toFood, isActiveFood]];
 }
 
-const maxValue = 100000
+const maxValue = 1000000
 
 
 function antPheromoneValue(pheromoneArr, currTime = simFrameCount){
@@ -3690,10 +3706,10 @@ const DATA = {
 			if(!Element.isTypes(X, Y, RADIATION_RESISTANT) && thisCell.acts < 1){
 				Element.setCell(X, Y, TYPES.RADIUM_GEM);
 				let change = Random.bool() ? -1 : 1;
-				while (RADIUM_SKIP.has(reference+change % ELEMENT_COUNT)) {
+				while (RADIUM_SKIP.has((reference+change) % ELEMENT_COUNT)) {
 					change += change;
 				}
-				if (!RADIUM_SKIP.has(reference+change % ELEMENT_COUNT)) {
+				if (!RADIUM_SKIP.has((reference+change) % ELEMENT_COUNT)) {
 					grid[X][Y].reference = (reference+change) % ELEMENT_COUNT;
 				} else{
 					grid[X][Y].reference = reference;
@@ -3754,11 +3770,6 @@ const DATA = {
 			return(toHome | toFood);
 		}
 		let cell = grid[x][y];
-
-	
-
-		
-
 	}),
 
 	[TYPES.TERMITE]: new Element(0, (x, y) => {
@@ -3788,7 +3799,7 @@ const DATA = {
 				// 	grid[pos[0]][pos[1]].vel = grid[x][y].vel;
 				// 	grid[pos[0]][pos[1]].vel.rotate(Math.pi)
 				// }
-				// if (Random.bool(0.9)) Element.setCell(x, y, TYPES.ANT_HILL) //ant hill grower
+				if (Random.bool(0.5)) Element.setCell(x, y, TYPES.ANT_HILL) //ant hill grower
 				
 				grid[x][y].acts = 0;
 				grid[x][y].vel.rotate(Math.PI)
@@ -3981,7 +3992,7 @@ const DATA = {
 		
 		Element.affectAllNeighbors(x, y, (ox, oy) => {
 			if (Element.isEmpty(ox, oy, LIQUID_PASSTHROUGH) && !Element.isType(ox, oy, TYPES.TERMITE)) {
-				if (Random.bool(0.001) | (grid[x][y].acts == 1 & Random.bool(0.05))){ //normal chance = 0.001
+				if (Random.bool(0.01) | (grid[x][y].acts == 1 & Random.bool(0.05))){ //normal chance = 0.001
 					makeCircle(x, y, TYPES.TERMITE, 2, 0.01, WATER_PASSTHROUGH);
 					grid[x][y].acts = 0;
 				}
@@ -4031,42 +4042,104 @@ const DATA = {
 
 	}),
 
-	[TYPES.TREE_GROWER]: new Element(1, freqColoring([
-		["#4d483f", 9],
-		["#383632", 8],
-		["#6b6452", 5],
-		["#a39c8c", 2]
-	]), 0.5, 0.2, (x, y) => {
+	[TYPES.TREE_SEED]: new Element(1, freqColoring([
+		["#423322", 9],
+		["#291f14", 8],
+		["#362a1d", 4],
+		["#69543e", 4],
+		["#594936", 3],
+	]), 0.04, 0.06, (x, y) => {
+		solidUpdate(x, y);
 
-		const maxItratIterations = Random.int(25,35);
+		if (Element.isType(x, y + 1, TYPES.DAMP_SOIL) && grid[x][y + 1].acts === 0) {
+			Element.setCell(x, y, TYPES.TREE_GENERATOR);
+		}
+	}, (x, y) => {
+		Element.trySetCell(x, y - 1, Random.bool(.4) ? TYPES.ASH : TYPES.SMOKE);
+	}),
+
+	[TYPES.TREE_GENERATOR]: new Element(1, (x, y) => {
+		return DATA[TYPES.WOOD].getColor(x, y)
+	}, 0.5, 0.2, (x, y) => {
+
 		let cell = grid[x][y];
 		let acts = cell.acts;
-		if (acts == 0) {
-			cell.vel = new Vector2(0, -1);
-		}
-		let radius = Math.round(5 / (acts + 1));
-		cell.vel.mag = Math.max(radius * 5, 1);
-		
-		const placeNext = (inVel) => {
-			let nextPosition = new Vector2(x + Math.round(inVel.x), y + Math.round(inVel.y));
-			if (Element.inBounds(nextPosition.x, nextPosition.y)) {
-				makeLine(x, y, nextPosition.x, nextPosition.y, TYPES.WOOD, radius, 1, new Set([TYPES.TREE_GROWER]));
-				Element.setCell(nextPosition.x, nextPosition.y, TYPES.TREE_GROWER);
-				grid[nextPosition.x][nextPosition.y].acts = acts + 1;
-				grid[nextPosition.x][nextPosition.y].vel = inVel;
-				Element.updateCell(nextPosition.x, nextPosition.y);
+		if (Random.bool(0.01 * (acts+1))) {
+			const maxIterations = 7;
+			if (acts == 0) {
+				cell.vel = new Vector2(0, -1);
 			}
+
+
+			let radius =  (acts == 0) ? 3 : Math.round(5 / (acts + 1));
+			cell.vel.mag = (acts == 0) ? 7 : Math.max(radius * 5, 1) + 3;
+			
+			if (acts == 0) {
+				makeCircle(x, y, TYPES.ROOT, radius, 1, new Set([TYPES.DAMP_SOIL]));
+			}
+
+			const placeNext = (inVel) => {
+				let nextPosition = new Vector2(x + Math.round(inVel.x), y + Math.round(inVel.y));
+				if (Element.inBounds(nextPosition.x, nextPosition.y)) {
+					makeLine(x, y, nextPosition.x, nextPosition.y, TYPES.WOOD, radius, 1, ALL_PASSTHROUGH);
+					Element.setCell(nextPosition.x, nextPosition.y, TYPES.TREE_GENERATOR);
+					grid[nextPosition.x][nextPosition.y].acts = acts + 1;
+					grid[nextPosition.x][nextPosition.y].vel = inVel;
+					Element.updateCell(nextPosition.x, nextPosition.y);
+				}
+			}
+			const angle = (acts == 0) ? 0 : (15  + Random.int(-5, 5)) * (Math.PI/180)//(Math.PI / 3) / (acts + 3);
+	
+			if (acts < maxIterations) {
+				const velocity = new Vector2(cell.vel.x, cell.vel.y);
+				placeNext(velocity.rotated(angle));
+				placeNext(velocity.rotated(-angle));
+			} 
+			if (Math.abs(maxIterations - acts) < 3) {
+				const velocity = new Vector2(cell.vel.x, cell.vel.y);
+				let velArr = [velocity.rotated(-angle), velocity.rotated(angle)];
+				velArr.forEach(inVel => {
+					inVel.mag = radius;
+					let nextPosition = new Vector2(x + Math.round(inVel.x), y + Math.round(inVel.y));
+					
+					if (Element.isEmpty(nextPosition.x, nextPosition.y, SOLID_PASSTHROUGH)) {
+						Element.setCell(nextPosition.x, nextPosition.y, TYPES.LEAVES);
+					}
+				});
+			}
+			Element.setCell(x, y, TYPES.WOOD);
+			
+		} else {
+			Element.updateCell(x, y);
+			
 		}
+	}),
 
-		const angle = (Math.PI / 3) / (acts + 3);
+	// [TYPES.CACTUS_TRUNK]: new Element(),
 
-		if (acts < maxItratIterations) {
-			const velocity = new Vector2(cell.vel.x, cell.vel.y);
-			placeNext(velocity.rotated(angle));
-			placeNext(velocity.rotated(-angle));
+	[TYPES.LEAVES]: new Element(0, [new Color("#025c0e"), new Color("#2d7036"), new Color("#219130")], 0.01, 0.95, (x, y) => {
+		const cell = grid[x][y];
+		let acts = cell.acts;
+		const maxGrowth = 4;
+		if (acts < maxGrowth){
+			let arr = (Element.getNeighborsOfType(x, y, TYPES.WOOD));
+			let woodCount = arr.reduce((a, b) => a + b);
+			if (woodCount < 3 && woodCount != 0) {
+				Element.affectAllNeighbors(x, y, (ox, oy) => {
+					if(Element.isEmpty(ox, oy)){
+						Element.trySetCell(ox, oy, TYPES.LEAVES);
+						grid[ox][oy].acts = acts + 0;
+					}
+				})
+			}
+			Element.affectAllNeighbors(x, y, (ox, oy)=>{
+				if(Element.isEmpty(ox, oy)){
+					Element.setCell(ox, oy, TYPES.LEAVES);
+					grid[ox][oy].acts = acts + 1;
+				}
+			});
 		}
-		Element.setCell(x, y, TYPES.WOOD);
-
+		
 	}),
 
 	[TYPES.IRON]: new Element(1, (x, y) => {
@@ -4343,14 +4416,19 @@ const DATA = {
 			} else Element.updateCell(x, y)
 		}
 		if (grid[x][y].acts === 1) {
+			let thisPassthrough = new Set([...SOLID_PASSTHROUGH]);
+			thisPassthrough.add(TYPES.SUNFLOWER_SEED);
+			thisPassthrough.add(TYPES.SUNFLOWER_STEM);
+			thisPassthrough.add(TYPES.SUNFLOWER_PETAL);
+
 			let shift = Random.range(0, Math.PI / 9)
 			for (let i = shift; i < 2 * Math.PI + shift; i += Math.PI / 9) {
 				const c = Math.cos(i);
 				const s = Math.sin(i);
-				makeLine(Math.round(c * 6 + x), Math.round(s * 6 + y), Math.round(c * 7 + x), Math.round(s * 7 + y), TYPES.SUNFLOWER_PETAL, 1, 1);
+				makeLine(Math.round(c * 6 + x), Math.round(s * 6 + y), Math.round(c * 7 + x), Math.round(s * 7 + y), TYPES.SUNFLOWER_PETAL, 1, 1, thisPassthrough);
 			}
-			makeCircle(x, y, TYPES.SUNFLOWER_PETAL, 6, 1)
-			makeCircle(x, y, TYPES.SUNFLOWER_SEED, 5, 1, ALL_PASSTHROUGH)
+			makeCircle(x, y, TYPES.SUNFLOWER_PETAL, 6, 1, thisPassthrough)
+			makeCircle(x, y, TYPES.SUNFLOWER_SEED, 5, 1, thisPassthrough)
 
 			grid[x][y].acts--;
 		}
@@ -4508,6 +4586,22 @@ const DATA = {
 	}),
 
 	[TYPES.WATER]: new Element(0, [new Color("#120a59"), new Color("#140960")], 0.4, 0.05, (x, y) => {
+		if (Random.bool(0.01)) {
+
+			let arr = (Element.getNeighborsOfType(x, y, TYPES.ICE));
+			let coldCount = (arr.reduce((a, b) => a + b));
+			let AirCount = Element.getNeighborsOfType(x, y, TYPES.AIR).reduce((a,b) => a+b);
+			if (Random.bool(0.0001 * (9 - AirCount))) {
+				if ((!(arr.reduce((a, b) => a + b)) && Random.bool(0.25)) || AirCount < 3) {
+					Element.setCell(x, y, TYPES.STEAM);
+				}else {
+					if (coldCount > 2){
+						Element.setCell(x, y, TYPES.ICE);
+					}
+				}
+				Element.updateCell(x, y);
+			}
+		}
 		liquidUpdate(x, y, soundEffects.liquidSound, WATER_PASSTHROUGH);
 	}, (x, y) => {
 		Element.setCell(x, y, TYPES.STEAM);
@@ -4612,7 +4706,7 @@ const DATA = {
 		};
 		return Color.avg([layer(x * 5, y * 5), layer(x * 10, y * 10), layer(x * 15, y * 15)]);
 
-	}, 0.5, 0.05, () => null, (x, y) => {
+	}, 0.5, 0.05, (x, y) => {if (Random.bool(.004)) Element.trySetCell(x, y + 1, TYPES.ROOT, SOIL_TYPES);}, (x, y) => {
 		Element.trySetCell(x, y - 1, Random.bool(.1) ? TYPES.ASH : TYPES.SMOKE);
 	}),
 
@@ -4705,7 +4799,7 @@ const DATA = {
 		if(grid[x][y].acts === 1 && Element.isEmpty(x, y + 1)){
 			// seeding
 			if(Random.bool(.005)){
-				Element.setCell(x, y + 1, Random.bool(.95) ? TYPES.SUNFLOWER_SEED : TYPES.THICKET_SEED)
+				Element.setCell(x, y + 1, Random.bool(.90) ? TYPES.SUNFLOWER_SEED : (Random.bool(.75) ? TYPES.THICKET_SEED : TYPES.TREE_SEED))
 				grid[x][y].acts = -3;
 			}
 			
@@ -6057,6 +6151,7 @@ function handleInput() {
 					eraseOnly = false;
 				} else if (key === "r") {
 					clearAll();		
+					forceRender = true;
 				} else if (key === "a") {
 					const { x: mx, y: my } = Vector2.floor(mouse.world.over(CELL));
 					if (Element.inBounds(mx, my) && STATIC_SOLID.has(grid[mx][my].id)) {
@@ -6245,6 +6340,7 @@ function stepGraphics() {
 					case 1:
 						displayCol.red = cell.vel.mag*50;
 						displayCol.blue = (Math.abs(cell.acts))*(255/8);
+						displayCol.green =  DATA[cell.id].reference ?  (cell.reference) ? 255/2 : 0 : 0;
 						displayCol = Color.lerp(displayCol, element.getColor(x, y), 0.3)
 						break;
 					case 2:
@@ -6721,7 +6817,8 @@ intervals.continuous(time => {
 					(!Element.inBounds(coord.x, coord.y)) ? "" : "coords: " + coord +
 					((hoveredElementVelInfo) ? "\nVel Info: " + hoveredElementVelInfo + " m: " + Math.round(hoveredElementVelInfo.mag*debugAccuracy)/debugAccuracy : "") +
 					((hoveredElementActs) ? "\nActs: " + hoveredElementActs : "") + 
-					((hoveredElementActs) ? "\nto Home: " + Math.round( antPheromoneValue( antBytePaser(hoveredElementActs)[0] ) * debugAccuracy ) / debugAccuracy + "\t to Food:" +  Math.round( antPheromoneValue( antBytePaser(hoveredElementActs)[1] ) * debugAccuracy ) / debugAccuracy: "")
+					((hoveredElementActs) ? "\nto Home: " + Math.round( antPheromoneValue( antBytePaser(hoveredElementActs)[0] ) * debugAccuracy ) / debugAccuracy + "\t to Food:" +  Math.round( antPheromoneValue( antBytePaser(hoveredElementActs)[1] ) * debugAccuracy ) / debugAccuracy: "") + 
+					((true) ? "\nReference: " + '\u27e8' + typeName(hoveredElementRef) + '\u27e9' + "test: ": "")
 					, 10, height - 10);	
 			}
 			
