@@ -1361,7 +1361,7 @@ const TERMITES = new Set([TYPES.ANT_HILL, TYPES.TERMITE]);
 const TERMITE_FOOD = new Set([...SUGARY, ...CORAL_ON, TYPES.CORAL_STIMULANT, TYPES.BONE, TYPES.BONE_DUST, TYPES.SUNFLOWER_SEED]);
 const TERMITE_EATABLE = new Set([...TERMITE_FOOD, TYPES.WOOD, TYPES.COTTON, TYPES.DYED_COTTON, TYPES.SOIL, ...MEATY, TYPES.SAND, TYPES.SUNFLOWER_PETAL]);
 
-const RADIUM_SKIP = new Set([TYPES.BAHHUM, TYPES.TERMINATOR, ...CONWAY])
+const RADIUM_SKIP = new Set([TYPES.BAHHUM, TYPES.TERMINATOR, ...CONWAY, TYPES.SCREEN_WIPE, TYPES.AIR])
 
 GHOST_CORAL_UNREACTIVE.delete(TYPES.CORAL_STIMULANT);
 GHOST_CORAL_REACT.delete(TYPES.PARTICLE);
@@ -3574,10 +3574,9 @@ const DATA = {
 				let rando = (Random.bool(0.4));
 				let isUnstable = ((rando) ? Element.isType(ox, oy, TYPES.UNSTABLE_ELEMENT) : 0);
 
-				console.log("isCondensed: " + isCondensed + "\nvelocity: " + velocity + "\ncoral: " + coral + "\nrando: " + rando + "\nisUnstable: " + isUnstable);
+				// console.log("isCondensed: " + isCondensed + "\nvelocity: " + velocity + "\ncoral: " + coral + "\nrando: " + rando + "\nisUnstable: " + isUnstable);
 
 				let count = isUnstable + isCondensed + Math.round(velocity*2) + coral;
-				console.log("the fuckkkkkkkkk");
 				console.log(count);
 				// count += (count < 2)? (rando) ? count * 2 : 1 : 0;
 				cell.acts += count;
@@ -3690,8 +3689,11 @@ const DATA = {
 			let reference = cell.id;
 			if(!Element.isTypes(X, Y, RADIATION_RESISTANT) && thisCell.acts < 1){
 				Element.setCell(X, Y, TYPES.RADIUM_GEM);
-				const change = Random.bool() ? -1 : 1;
-				if (!RADIUM_SKIP.has(reference+change)) {
+				let change = Random.bool() ? -1 : 1;
+				while (RADIUM_SKIP.has(reference+change % ELEMENT_COUNT)) {
+					change += change;
+				}
+				if (!RADIUM_SKIP.has(reference+change % ELEMENT_COUNT)) {
 					grid[X][Y].reference = (reference+change) % ELEMENT_COUNT;
 				} else{
 					grid[X][Y].reference = reference;
