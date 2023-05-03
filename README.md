@@ -6,3 +6,5 @@ Coded in JavaScript
 Run from SandSim.html
 
 Created by Khosmos3 and Elkwizard
+
+heavily modded by Otter502
