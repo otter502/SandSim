@@ -3555,7 +3555,16 @@ const DATA = {
 
 		return Color.alpha(Color.lerp(new Color("#787878"), new Color("#99a7a8"), top * (1 - yt) + bottom * yt), 0.01);
 		//return new Color("#ffff0001");
-	}, 0.5, 1, () => null, (x, y) => {
+	}, 0.5, 1, (x, y) => {
+		solidUpdate(x, y, GRAVITY, 0);
+		let waterCount = Element.getNeighborsOfTypes(x, y, WATER_TYPES).reduce((a, b) => a + b);
+		if (waterCount) {
+			Element.updateCell(x, y);
+		}
+		if (waterCount > 2 && Random.bool(0.001)) {
+			Element.tryBurn(x, y, TYPES.MAGNESIUM_FIRE);
+		}
+	}, (x, y) => {
 		makeCircle(x, y, TYPES.MAGNESIUM_FIRE, 3);
 		Element.die(x, y);
 		return true;
@@ -6818,7 +6827,7 @@ intervals.continuous(time => {
 					((hoveredElementVelInfo) ? "\nVel Info: " + hoveredElementVelInfo + " m: " + Math.round(hoveredElementVelInfo.mag*debugAccuracy)/debugAccuracy : "") +
 					((hoveredElementActs) ? "\nActs: " + hoveredElementActs : "") + 
 					((hoveredElementActs) ? "\nto Home: " + Math.round( antPheromoneValue( antBytePaser(hoveredElementActs)[0] ) * debugAccuracy ) / debugAccuracy + "\t to Food:" +  Math.round( antPheromoneValue( antBytePaser(hoveredElementActs)[1] ) * debugAccuracy ) / debugAccuracy: "") + 
-					((true) ? "\nReference: " + '\u27e8' + typeName(hoveredElementRef) + '\u27e9' + "test: ": "")
+					((hoveredElementRef) ? "\nReference: " + '\u27e8' + typeName(hoveredElementRef) + '\u27e9': "")
 					, 10, height - 10);	
 			}
 			
