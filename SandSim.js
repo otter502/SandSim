@@ -3561,8 +3561,12 @@ const DATA = {
 		if (waterCount) {
 			Element.updateCell(x, y);
 		}
-		if (waterCount > 2 && Random.bool(0.001)) {
+		if (waterCount > 2 && Random.bool(0.000001)) {
 			Element.tryBurn(x, y, TYPES.MAGNESIUM_FIRE);
+			Element.tryBurn(x, y + 1, TYPES.MAGNESIUM_FIRE);
+			Element.tryBurn(x, y + 2, TYPES.MAGNESIUM_FIRE);
+
+
 		}
 	}, (x, y) => {
 		makeCircle(x, y, TYPES.MAGNESIUM_FIRE, 3);
