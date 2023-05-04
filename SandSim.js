@@ -51,7 +51,7 @@ const TYPES = Object.fromEntries([
 	"DDT",
 	"ANT", "DAMSELFLY", "MINNOW", "MITE", "LIGHTNING_BUG", "BEE", "TERMITE", "ANT_HILL",
 	"HIVE", "HONEY", "SUGAR", "CARMEL",
-	"WATER", "POND_WATER", "ICE", "SNOW", "STAINED_SNOW", "SALT", "SALT_WATER",
+	"WATER", "WATER_VAPOR", "POND_WATER", "ICE", "SNOW", "STAINED_SNOW", "SALT", "SALT_WATER",
 	"SAND", "KELP", "KELP_TOP", "PNEUMATOCYST",
 	"COTTON", "DYED_COTTON",
 	"WOOD", "COAL", "OIL", "FUSE", "ASH",
@@ -1322,7 +1322,7 @@ const DISPERSION = 4;
 
 scene.physicsEngine.gravity.y = GRAVITY * CELL;
 
-const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT, TYPES.INCENSE_SMOKE, TYPES.CONWAY_ALIVE]);
+const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT, TYPES.INCENSE_SMOKE, TYPES.CONWAY_ALIVE, TYPES.WATER_VAPOR]);
 const OTHER_GAS = new Set([TYPES.AIR, ...GAS]);
 const LIQUID = new Set([TYPES.WATER, TYPES.POND_WATER, TYPES.LAVA, TYPES.POWER_LAVA, TYPES.GREEN_LAVA, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
 const GAS_PASSTHROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.SPIRAL_FIRE, TYPES.MAGNESIUM_FIRE]);
@@ -1337,10 +1337,11 @@ for (const type of SOLID_PASSTHROUGH)
 	SOLID.delete(type);
 SOLID.delete(TYPES.RUST);
 SOLID.delete(TYPES.ASH);
+SOLID.delete(TYPES.WATER_VAPOR);
 SOLID.delete(TYPES.GRAINY_WAX);
 const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASSTHROUGH, TYPES.PARTICLE]);
 const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
-const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER, TYPES.POND_WATER]);
+const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER, TYPES.POND_WATER, TYPES.WATER_VAPOR]);
 const GLAZE_TYPES = new Set([TYPES.GLAZE_BASE, TYPES.DECUMAN_GLAZE])
 const ANT_UNSTICKABLE = new Set([TYPES.GENDERFLUID, TYPES.COPPER, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.IRON, TYPES.LIQUID_IRON, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.MUSCLE, ...WATER_TYPES]);
 const CONDUCTIVE = new Set([TYPES.COPPER_BRICKS, TYPES.GENDERFLUID, TYPES.LIGHT_SAD, TYPES.COPPER, TYPES.GOLD, TYPES.AUREATE_DUST, TYPES.LIQUID_GOLD, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.IRON, TYPES.CONWAY_DEAD, TYPES.MUSCLE, ...WATER_TYPES]);
@@ -1370,6 +1371,8 @@ const CORALS = new Set([...CORAL_OFF, ...CORAL_ON, TYPES.CORAL_CONSUMER, TYPES.C
 const GHOST_CORAL_UNREACTIVE = new Set([...CORALS, TYPES.GLASS, ...CONVEYOR_RESISTANT, TYPES.AIR]);
 const GHOST_CORAL_REACT = new Set(Object.values(TYPES));
 const GROUND = new Set([TYPES.STONE, TYPES.CONDENSED_STONE, TYPES.MARBLE]);
+
+const TREE_PLACING_PASSTHROUGH = new Set([...SOLID_PASSTHROUGH, ...SUNFLOWER, ...THICKETS, TYPES.LEAVES])
 
 const LIGHTNING_PASSTHROUGH = new Set([...LIQUID_PASSTHROUGH, TYPES.SAND]);
 const CONWAY = new Set([TYPES.CONWAY_ALIVE, TYPES.CONWAY_DEAD])
@@ -3757,33 +3760,33 @@ const DATA = {
 		return false;
 	}, true),
 
-	[TYPES.ANTSIM]: new Element(0, (x, y) => {
-		return Color.alpha(new Color("brown"), 0);
-	}, 1, 0.5, (x, y) => {
-		//okay simple testing
-		//all there is will be a two pheromone system
-		//sudo code time
-		//get grid reference to the cells the ant can see
-		//check if food
-		//get pheromone values for each
-		//compare them all
-		//move to most recent one
-		//place new marker
-		//
+	// [TYPES.ANTSIM]: new Element(0, (x, y) => {
+	// 	return Color.alpha(new Color("brown"), 0);
+	// }, 1, 0.5, (x, y) => {
+	// 	//okay simple testing
+	// 	//all there is will be a two pheromone system
+	// 	//sudo code time
+	// 	//get grid reference to the cells the ant can see
+	// 	//check if food
+	// 	//get pheromone values for each
+	// 	//compare them all
+	// 	//move to most recent one
+	// 	//place new marker
+	// 	//
 
-		let getActsArray = (acts) => {
-			let toHome = readBitfield(acts, 0, 16);
-			let toFood = readBitfield(acts, 16, 16);
-			return [toHome, toFood];
-		}
-		let placeActsArray = (toHome, toFood) => {
-			toHome |= 0xffff;
-			toFood |= 0xffff;
-			toFood <<= 16;
-			return(toHome | toFood);
-		}
-		let cell = grid[x][y];
-	}),
+	// 	let getActsArray = (acts) => {
+	// 		let toHome = readBitfield(acts, 0, 16);
+	// 		let toFood = readBitfield(acts, 16, 16);
+	// 		return [toHome, toFood];
+	// 	}
+	// 	let placeActsArray = (toHome, toFood) => {
+	// 		toHome |= 0xffff;
+	// 		toFood |= 0xffff;
+	// 		toFood <<= 16;
+	// 		return(toHome | toFood);
+	// 	}
+	// 	let cell = grid[x][y];
+	// }),
 
 	[TYPES.TERMITE]: new Element(0, (x, y) => {
 		return Color.alpha(new Color("brown"), 0);
@@ -3812,7 +3815,7 @@ const DATA = {
 				// 	grid[pos[0]][pos[1]].vel = grid[x][y].vel;
 				// 	grid[pos[0]][pos[1]].vel.rotate(Math.pi)
 				// }
-				if (Random.bool(0.5)) Element.setCell(x, y, TYPES.ANT_HILL) //ant hill grower
+				// if (Random.bool(0.5)) Element.setCell(x, y, TYPES.ANT_HILL) //ant hill grower
 				
 				grid[x][y].acts = 0;
 				grid[x][y].vel.rotate(Math.PI)
@@ -4094,14 +4097,14 @@ const DATA = {
 			const placeNext = (inVel) => {
 				let nextPosition = new Vector2(x + Math.round(inVel.x), y + Math.round(inVel.y));
 				if (Element.inBounds(nextPosition.x, nextPosition.y)) {
-					makeLine(x, y, nextPosition.x, nextPosition.y, TYPES.WOOD, radius, 1, ALL_PASSTHROUGH);
+					makeLine(x, y, nextPosition.x, nextPosition.y, TYPES.WOOD, radius, 1, TREE_PLACING_PASSTHROUGH);
 					Element.setCell(nextPosition.x, nextPosition.y, TYPES.TREE_GENERATOR);
 					grid[nextPosition.x][nextPosition.y].acts = acts + 1;
 					grid[nextPosition.x][nextPosition.y].vel = inVel;
 					Element.updateCell(nextPosition.x, nextPosition.y);
 				}
 			}
-			const angle = (acts == 0) ? 0 : (15  + Random.int(-5, 5)) * (Math.PI/180)//(Math.PI / 3) / (acts + 3);
+			const angle = (acts == 0) ? 0 : (20  + Random.int(-5, 5)) * (Math.PI/180)//(Math.PI / 3) / (acts + 3);
 	
 			if (acts < maxIterations) {
 				const velocity = new Vector2(cell.vel.x, cell.vel.y);
@@ -4115,7 +4118,7 @@ const DATA = {
 					inVel.mag = radius;
 					let nextPosition = new Vector2(x + Math.round(inVel.x), y + Math.round(inVel.y));
 					
-					if (Element.isEmpty(nextPosition.x, nextPosition.y, SOLID_PASSTHROUGH)) {
+					if (Element.isEmpty(nextPosition.x, nextPosition.y, TREE_PLACING_PASSTHROUGH)) {
 						Element.setCell(nextPosition.x, nextPosition.y, TYPES.LEAVES);
 					}
 				});
@@ -4130,7 +4133,7 @@ const DATA = {
 
 	// [TYPES.CACTUS_TRUNK]: new Element(),
 
-	[TYPES.LEAVES]: new Element(0, [new Color("#025c0e"), new Color("#2d7036"), new Color("#219130")], 0.01, 0.95, (x, y) => {
+	[TYPES.LEAVES]: new Element(0, [new Color("#025c0e"), new Color("#2d7036"), new Color("#219130")], 0.01, 0.25, (x, y) => {
 		const cell = grid[x][y];
 		let acts = cell.acts;
 		const maxGrowth = 4;
@@ -4140,7 +4143,7 @@ const DATA = {
 			if (woodCount < 3 && woodCount != 0) {
 				Element.affectAllNeighbors(x, y, (ox, oy) => {
 					if(Element.isEmpty(ox, oy)){
-						Element.trySetCell(ox, oy, TYPES.LEAVES);
+						Element.trySetCell(ox, oy, TYPES.LEAVES, TREE_PLACING_PASSTHROUGH);
 						grid[ox][oy].acts = acts + 0;
 					}
 				})
@@ -4192,6 +4195,50 @@ const DATA = {
 
 		liquidUpdate(x, y)
 	}),
+
+	[TYPES.WATER_VAPOR]: new Element(0, (x, y) => {
+		let blue = new Color("blue");
+		let background = DATA[TYPES.TILE_BASE]
+						.getColor(x, y)
+						.times(0.1)
+						.opaque;
+		return Color.alpha(Color.lerp(background, blue, 0.2), 0);
+	}, 0.1, 0, (x, y) => {
+		//altitude init
+		//recalc alt with random chance
+		//condensate with random chance
+		//reference == water type ?
+		//hover / gitter
+		//glass / ice / metal interaction
+		//okay better way interact with self 
+		let cell = grid[x][y];
+	
+
+		if (Random.bool(0.0001)) {
+			Element.setCell(x, y, TYPES.WATER);
+			return;
+		}
+		if (cell.vel.mag === 0) {
+			cell.vel = new Vector2(0, 1);
+			cell.vel.mag = 1;
+		}
+		//version of chaos update but rn distrubution testing
+		let waterVaporCount = Element.getNeighborsOfTypes(x, y, WATER_TYPES).reduce((a, b) => a+b);
+		let solidCount = Element.getNeighborsOfTypes(x, y, SOLID).reduce((a, b) => a + b);
+		if (waterVaporCount > 3 || solidCount > 1) {
+			cell.vel.y -= 5;
+			if (waterVaporCount > 7) {
+				cell.vel.y -= 10
+			}
+		} else {
+			cell.vel.y += 1;
+		}
+
+		if (Random.bool(0.5)) cell.vel.x = Number.clamp(cell.vel.x + 3 - (Random.bool() * 6), -3, 3);
+		
+		cell.vel.mag = 2;
+		Element.tryMove(x, y, x + Math.round(cell.vel.x), y + Math.round(cell.vel.y), SOLID_PASSTHROUGH);
+	}, (x, y) => null),
 
 	[TYPES.BAHHUM]: new Element(1, (x, y) => {
 		let th = Number.remap(Random.perlin2D(x, y, .03), 0, 1, 0.1, 0.4);
@@ -4605,12 +4652,10 @@ const DATA = {
 			let coldCount = (arr.reduce((a, b) => a + b));
 			let AirCount = Element.getNeighborsOfType(x, y, TYPES.AIR).reduce((a,b) => a+b);
 			if (Random.bool(0.0001 * (9 - AirCount))) {
-				if ((!(arr.reduce((a, b) => a + b)) && Random.bool(0.25)) || AirCount < 3) {
-					Element.setCell(x, y, TYPES.STEAM);
+				if ((!coldCount) && Random.bool(0.1) || (AirCount < 3 && Random.bool(0.5))) {
+					Element.setCell(x, y, TYPES.WATER_VAPOR);
 				}else {
-					if (coldCount > 2){
-						Element.setCell(x, y, TYPES.ICE);
-					}
+					if(coldCount) element.setCell(x, y, TYPES.ICE);
 				}
 				Element.updateCell(x, y);
 			}
@@ -6351,9 +6396,10 @@ function stepGraphics() {
 				let displayCol = new Color(0,0,0,0);
 				switch (renderView) {
 					case 1:
+						//negative values are not included annoyingly
 						displayCol.red = cell.vel.mag*50;
 						displayCol.blue = (Math.abs(cell.acts))*(255/8);
-						displayCol.green =  DATA[cell.id].reference ?  (cell.reference) ? 255/2 : 0 : 0;
+						displayCol.green =  DATA[cell.id].reference ?  (cell.reference) ? (255 * DATA[cell.reference].getColor(x, y).brightness) : 0 : 0;
 						displayCol = Color.lerp(displayCol, element.getColor(x, y), 0.3)
 						break;
 					case 2:
