@@ -58,7 +58,7 @@ const TYPES = Object.fromEntries([
 	"WAX", "GRAINY_WAX", "MOLTEN_WAX",
 	"LAVA", "POWER_LAVA", "GREEN_LAVA",
 	"STEAM", "SMOKE", "HYDROGEN",
-	"GLASS", "ACID", "UNSTABLE_ELEMENT", "SEMI_STABLE_ELEMENT",
+	"GLASS", "ACID", "UNSTABLE_ELEMENT", "SEMI_STABLE_ELEMENT", "GROUNDING_METAL", "POSITIVE_METAL", "CONDUCTIVE_FLUID", "BLUE_ELECTRICITY",
 	"BATTERY", "ELECTRICITY","GERMANIUM", "ACTIVE_GERMANIUM", "BOID",
 	"CONVEYOR_LEFT", "CONVEYOR_RIGHT", "STEEL",
 	"COPPER", "LIQUID_COPPER",
@@ -1324,7 +1324,7 @@ scene.physicsEngine.gravity.y = GRAVITY * CELL;
 
 const GAS = new Set([TYPES.STEAM, TYPES.SMOKE, TYPES.ESTIUM_GAS, TYPES.HYDROGEN, TYPES.DDT, TYPES.INCENSE_SMOKE, TYPES.CONWAY_ALIVE, TYPES.WATER_VAPOR]);
 const OTHER_GAS = new Set([TYPES.AIR, ...GAS]);
-const LIQUID = new Set([TYPES.WATER, TYPES.POND_WATER, TYPES.LAVA, TYPES.POWER_LAVA, TYPES.GREEN_LAVA, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
+const LIQUID = new Set([TYPES.CONDUCTIVE_FLUID, TYPES.WATER, TYPES.POND_WATER, TYPES.LAVA, TYPES.POWER_LAVA, TYPES.GREEN_LAVA, TYPES.BLOOD, TYPES.ESTIUM, TYPES.DECUMAN_GLAZE, TYPES.GLAZE_BASE, TYPES.OIL, TYPES.LIQUID_COPPER, TYPES.LIQUID_IRON, TYPES.LIQUID_LEAD, TYPES.LIQUID_GOLD, TYPES.GENDERFLUID, TYPES.ACID, TYPES.HONEY, TYPES.MOLTEN_WAX, TYPES.SALT_WATER]);
 const GAS_PASSTHROUGH = new Set([TYPES.AIR, TYPES.FIRE, TYPES.BLUE_FIRE, TYPES.SPIRAL_FIRE, TYPES.MAGNESIUM_FIRE]);
 const LIQUID_PASSTHROUGH = new Set([...GAS_PASSTHROUGH, ...GAS]);
 const WATER_PASSTHROUGH = new Set([...LIQUID_PASSTHROUGH, TYPES.OIL, TYPES.ESTIUM]);
@@ -1341,11 +1341,11 @@ SOLID.delete(TYPES.WATER_VAPOR);
 SOLID.delete(TYPES.GRAINY_WAX);
 const PARTICLE_PASSTHROUGH = new Set([...SOLID_PASSTHROUGH, TYPES.PARTICLE]);
 const ALL_PASSTHROUGH = new Set(Object.values(TYPES));
-const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER, TYPES.POND_WATER, TYPES.WATER_VAPOR]);
+const WATER_TYPES = new Set([TYPES.WATER, TYPES.SALT_WATER, TYPES.POND_WATER, TYPES.WATER_VAPOR, TYPES.CONDUCTIVE_FLUID]);
 const GLAZE_TYPES = new Set([TYPES.GLAZE_BASE, TYPES.DECUMAN_GLAZE])
 const ANT_UNSTICKABLE = new Set([TYPES.GENDERFLUID, TYPES.COPPER, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.IRON, TYPES.LIQUID_IRON, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.MUSCLE, ...WATER_TYPES]);
-const CONDUCTIVE = new Set([TYPES.COPPER_BRICKS, TYPES.GENDERFLUID, TYPES.LIGHT_SAD, TYPES.COPPER, TYPES.GOLD, TYPES.AUREATE_DUST, TYPES.LIQUID_GOLD, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.IRON, TYPES.CONWAY_DEAD, TYPES.MUSCLE, ...WATER_TYPES]);
-const ELECTRICITY_PASSTHROUGH = new Set([...CONDUCTIVE,TYPES.GERMANIUM, TYPES.ELECTRICITY, TYPES.CONWAY_ALIVE]);
+const CONDUCTIVE = new Set([TYPES.CONDUCTIVE_FLUID, TYPES.COPPER_BRICKS, TYPES.GENDERFLUID, TYPES.LIGHT_SAD, TYPES.COPPER, TYPES.GOLD, TYPES.AUREATE_DUST, TYPES.LIQUID_GOLD, TYPES.HIGH_EXPLOSIVE, TYPES.LIQUID_COPPER, TYPES.LEAD, TYPES.LIQUID_LEAD, TYPES.ESTIUM_GAS, TYPES.STEEL, TYPES.BRICK, TYPES.IRON, TYPES.CONWAY_DEAD, TYPES.MUSCLE, ...WATER_TYPES]);
+const ELECTRICITY_PASSTHROUGH = new Set([...CONDUCTIVE,TYPES.GERMANIUM, TYPES.ELECTRICITY, TYPES.BLUE_ELECTRICITY, TYPES.CONWAY_ALIVE]);
 const SUGARY = new Set([TYPES.SUGAR, TYPES.HONEY, TYPES.CARMEL]);
 const COLD = new Set([...WATER_TYPES, ...GLAZE_TYPES, TYPES.ICE, TYPES.BLOOD, TYPES.ESTIUM, TYPES.HONEY]);
 const SOIL_TYPES = new Set([TYPES.DAMP_SOIL, TYPES.SOIL]);
@@ -1390,7 +1390,7 @@ for (const type of GHOST_CORAL_UNREACTIVE)
 const URANIUM_PASSTHROUGH = new Set(Object.values(TYPES));
 URANIUM_PASSTHROUGH.delete(TYPES.URANIUM);
 
-const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR, TYPES.AIR]);
+const TERMINATOR_UNREACTIVE = new Set([TYPES.TERMINATOR, TYPES.AIR, TYPES.LEAD]);
 const HEAT = new Set([TYPES.FIRE,TYPES.BLUE_FIRE, TYPES.SPIRAL_FIRE, TYPES.MAGNESIUM_FIRE,TYPES.LAVA,TYPES.POWER_LAVA,TYPES.EXOTHERMIA]);
 const FIRE_TYPES = new Set([TYPES.FIRE,TYPES.BLUE_FIRE, TYPES.SPIRAL_FIRE, TYPES.MAGNESIUM_FIRE]);
 
@@ -1979,7 +1979,7 @@ const antCheck = (x, y, angle, vel, isWandering = true) =>{
 	if (checkedCell.id != TYPES.AIR) return -1;
 	// console.log("acts please not be zero: "+checkedCell.acts);
 	let pheromones = antBytePaser(checkedCell.acts);
-	return antPheromoneValue((isWandering) ? pheromones[1] : pheromones[0]) * 5000; //the 5000 shouldn't actually need to be here at all... 
+	return antPheromoneValue((isWandering) ? pheromones[1] : -pheromones[0]) * 5000; //the 5000 shouldn't actually need to be here at all... 
 	//this will return toHome strength if isWandering is set to false
 
 	//maybe do a weighted check, that way the returning ones follow a path too? 
@@ -1995,6 +1995,14 @@ const relGridGet = (x, y, vector) => {
 };
 
 let antTestingValue = -65536; 
+
+
+//fireAnt data
+
+const getFireAntData = (x, y) => {
+    
+};
+
 
 const DATA = {
 	[TYPES.AIR]: new Element(0, Color.BLANK),
@@ -2626,6 +2634,7 @@ const DATA = {
 		let strength = 2;
 
 		if (grid[x][y].acts === 0 && Element.isType(x, y, TYPES.ACTIVE_NEURON)) Element.react(x, y, TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON);
+		if (grid[x][y].acts === 0 && Element.isType(x, y, TYPES.ACTIVE_NEURON)) Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL);
 		if (grid[x][y].acts === strength) Element.setCell(x, y, TYPES.INACTIVE_NEURON);
 		grid[x][y].acts++;
 
@@ -2656,9 +2665,16 @@ const DATA = {
 
 	[TYPES.EPIDERMIS]: new Element(1, new Color("#8f6863"), .47, .03, (x, y) => {
 		let m = 0;
+        grid[x][y].acts = 0
 		Element.affectNeighbors(x, y, (ox, oy) => {
 			if (Element.isTypes(ox, oy, MEATY) || Element.isType(ox, oy, TYPES.BONE)) m++;
+			if (Element.isTypes(ox, oy, CONDUCTIVE) || Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 5
+			if (Element.isType(ox, oy, TYPES.EPIDERMIS) && grid[ox][oy].acts > 0) {
+                grid[x][y].acts = Math.max(grid[x][y].acts, grid[ox][oy].acts - 1) 
+				Element.updateCell(x, y)
+            }
 		})
+        if (grid[x][y].acts > 0) Element.react(x, y, TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON)
 		if (m > 7) Element.setCell(x, y, TYPES.MUSCLE);
 	}, (x, y) => {
 		Element.trySetCell(x, y - 1, Random.bool(.6) ? TYPES.BLOOD : Random.bool() ? TYPES.STEAM : TYPES.SMOKE);
@@ -2690,14 +2706,14 @@ const DATA = {
 	}, 0.2, 0.1, (x, y) => {
 		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
 			if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 120;
-			if (Element.isTypes(ox, oy, CORAL_ON) && !Element.isType(ox, oy, TYPES.COMPRESSED_CORAL) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = Math.min(100, grid[ox][oy].acts--);
+            if (Element.isType(ox, oy, TYPES.ACTIVE_NEURON) && grid[ox][oy].acts == 0) grid[x][y].acts = 60;
+            if (Element.isTypes(ox, oy, CORAL_ON) && !Element.isType(ox, oy, TYPES.COMPRESSED_CORAL) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = Math.min(100, grid[ox][oy].acts--);
 		})
 		if (grid[x][y].acts <= 0) Element.setCell(x, y, TYPES.DEAD_CORAL);
 		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.CORAL)){
 			Element.react(x, y, TYPES.DEAD_CORAL, TYPES.CORAL, 1, true);
 			Element.react(x, y, TYPES.PETRIFIED_CORAL, TYPES.ELDER_CORAL, .5, true);
 			Element.react(x, y, TYPES.GHOST_CORAL, TYPES.CORPOREAL_CORAL, 1, true);
-
 		}
 		grid[x][y].acts-=2;
 
@@ -2743,7 +2759,7 @@ const DATA = {
 	}, 0.4, 0.04, (x, y) => {
 		Element.affectCardinalNeighbors(x, y, (ox, oy) => {
 			// if (Element.isType(ox, oy, TYPES.CORAL_STIMULANT)) grid[x][y].acts = 400;
-			if (Element.isTypes(ox, oy, CORAL_ON) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = Math.min(100, grid[ox][oy].acts--);
+			if (Element.isTypes(ox, oy, CORAL_ON) && !Element.isType(ox, oy, TYPES.COMPRESSED_CORAL) && grid[ox][oy].acts > grid[x][y].acts) grid[x][y].acts = Math.min(100, grid[ox][oy].acts--);
 		})
 		if (grid[x][y].acts <= 0) Element.setCell(x, y, TYPES.GHOST_CORAL);
 		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.CORPOREAL_CORAL)){
@@ -2794,6 +2810,7 @@ const DATA = {
 		if (grid[x][y].acts <= 0) Element.setCell(x, y, TYPES.DEAD_COMPRESSED_CORAL);
 		if (grid[x][y].acts !== 0 && Element.isType(x, y, TYPES.COMPRESSED_CORAL)){
 			Element.react(x, y, TYPES.DEAD_COMPRESSED_CORAL, TYPES.COMPRESSED_CORAL, 1, true);
+			Element.react(x, y, TYPES.INACTIVE_NEURON, TYPES.ACTIVE_NEURON, 1, true);
 		}
 		grid[x][y].acts-=2;
 
@@ -2945,6 +2962,87 @@ const DATA = {
 		Element.setCell(x, y, TYPES.LIQUID_LEAD);
 		return true;
 	}),
+
+	[TYPES.GROUNDING_METAL]: new Element(1, new Color("#4a4a4a"), 0.65, 0),
+	[TYPES.POSITIVE_METAL]: new Element(1, Color.RED, 0.65, 0, (x, y)=>{
+		Element.affectAllNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.CONDUCTIVE_FLUID) && grid[ox][oy].acts > 0 && Random.bool(0.05)) {
+				Element.setCell(ox, oy, TYPES.BLUE_ELECTRICITY);
+				// grid[ox][oy].reference = TYPES.CONDUCTIVE_FLUID;
+			}
+		})
+	}),
+
+	[TYPES.CONDUCTIVE_FLUID]: new Element(1, [new Color("#120a59"), new Color("#140960"), new Color("#093560")], 0.4, 0.05, (x, y) => {
+		const topValue = 300;
+		let foundGround = false;
+		let maxValue = 0;
+		Element.affectAllNeighbors(x, y, (ox, oy) => {
+			if (Element.isType(ox, oy, TYPES.GROUNDING_METAL)) {
+				foundGround = true;
+				maxValue = topValue;
+			} else if(Element.isType(ox, oy, TYPES.CONDUCTIVE_FLUID) && !foundGround){
+				maxValue = Math.max(maxValue, grid[ox][oy].acts);
+			}
+		});
+		if (!(maxValue == 0) && !(maxValue == topValue) && grid[x][y].acts !== maxValue) {
+			Element.updateCell(x, y);
+		}
+		// if(grid[x][y].acts !== maxValue) {	
+		// 	Element.updateCell(x, y);
+		// }
+		grid[x][y].acts = Math.max(maxValue - 1, 0);
+		liquidUpdate(x, y);
+	}),
+
+	
+	[TYPES.BLUE_ELECTRICITY]: new Element(40, Color.CYAN, 0, 0, (x, y)=>{
+		let relPos = Vector2.origin;
+		let maxValue = 0;
+		let grounded = false;
+		let acts = grid[x][y].acts;
+		const deathType = TYPES.CONDUCTIVE_FLUID;//grid[x][y].reference;
+		const lifespan = 500;
+		let hydrogenProb = 0;
+		if (acts > lifespan) {
+			Element.setCell(x, y, TYPES.CONDUCTIVE_FLUID);
+			return;
+		}
+		Element.affectAllNeighbors(x, y, (ox, oy)=>{
+			if (Element.isType(ox, oy, TYPES.GROUNDING_METAL)){
+				Element.setCell(x, y, deathType);
+				return;
+			} 
+			if(Element.isType(ox, oy, TYPES.CONDUCTIVE_FLUID)){
+				hydrogenProb += 1;
+			}
+			if (grid[ox][oy].acts > maxValue) {
+				maxValue = grid[ox][oy].acts
+				relPos = new Vector2(ox - x, oy - y);
+			}
+		})
+		grid[x][y].acts = acts + 1;
+		// if (maxValue == 0) {
+		// 	grid[x][y].acts = acts + 5;
+		// 	return;
+		// }
+		relPos.mag = 1;
+		grid[x][y].vel = relPos
+		let moved = Element.tryMove(x, y, x + Math.round(relPos.x), y + Math.round(relPos.y), ELECTRICITY_PASSTHROUGH);/*, (x, y, fx, fy) => {
+			const targetType = grid[fx][fy].type;
+			grid[x][y].reference = targetType;
+			Element.setCellId(fx, fy, TYPES.BLUE_ELECTRICITY);
+		}); //TODO set passthrough up*/
+	
+		// if(moved){
+			Element.setCell(x, y, deathType);
+			if (Element.isEmpty(x, y - 1) && Random.bool((hydrogenProb/8)/10)) {
+				Element.trySetCell(x, y - 1, TYPES.HYDROGEN)
+			}
+		// }
+		Element.updateCell(x, y);
+	}, true),
+
 
 	[TYPES.BATTERY]: new Element(1, (x, y) => {
 		const W = 5;
@@ -3788,6 +3886,17 @@ const DATA = {
 	// 	let cell = grid[x][y];
 	// }),
 
+    [TYPES.FIREANT]: new Element(0, (x,y) => {
+		return Color.alpha(new Color("rosybrown"), 0);
+    }, 1, 0.5, (x, y) => {
+        //retrieve data
+        //[holding food, current pheromone Frame, simFrame]
+        
+        //pheromone age measured in frame
+
+        //determine direction to travel
+    }),
+
 	[TYPES.TERMITE]: new Element(0, (x, y) => {
 		return Color.alpha(new Color("brown"), 0);
 	}, 1, 0.5, (x, y) => {
@@ -4154,6 +4263,7 @@ const DATA = {
 					grid[ox][oy].acts = acts + 1;
 				}
 			});
+			cell.acts++;
 		}
 		
 	}),
@@ -4648,17 +4758,17 @@ const DATA = {
 	[TYPES.WATER]: new Element(0, [new Color("#120a59"), new Color("#140960")], 0.4, 0.05, (x, y) => {
 		if (Random.bool(0.01)) {
 
-			let arr = (Element.getNeighborsOfType(x, y, TYPES.ICE));
-			let coldCount = (arr.reduce((a, b) => a + b));
-			let AirCount = Element.getNeighborsOfType(x, y, TYPES.AIR).reduce((a,b) => a+b);
-			if (Random.bool(0.0001 * (9 - AirCount))) {
-				if ((!coldCount) && Random.bool(0.1) || (AirCount < 3 && Random.bool(0.5))) {
-					Element.setCell(x, y, TYPES.WATER_VAPOR);
-				}else {
-					if(coldCount) element.setCell(x, y, TYPES.ICE);
-				}
-				Element.updateCell(x, y);
-			}
+			// let arr = (Element.getNeighborsOfType(x, y, TYPES.ICE));
+			// let coldCount = (arr.reduce((a, b) => a + b));
+			// let AirCount = Element.getNeighborsOfType(x, y, TYPES.AIR).reduce((a,b) => a+b);
+			// if (Random.bool(0.0001 * (9 - AirCount))) {
+			// 	if ((!coldCount) && Random.bool(0.1) || (AirCount < 3 && Random.bool(0.5))) {
+			// 		// Element.setCell(x, y, TYPES.WATER_VAPOR);
+			// 	}else {
+			// 		if(coldCount) element.setCell(x, y, TYPES.ICE);
+			// 	}
+			// 	Element.updateCell(x, y);
+			// }
 		}
 		liquidUpdate(x, y, soundEffects.liquidSound, WATER_PASSTHROUGH);
 	}, (x, y) => {
@@ -5411,7 +5521,7 @@ const DATA = {
 			cell.acts++;
 		}
 		Element.updateCell(x, y);
-	}, (x, y) => null, true),
+	}, (x, y) => null),//, true),
 
 	[TYPES.LIGHT_SAD]: new Element(1, new Color(20, 20, 20), 0.9, 0.001, (x, y) => {
 		Element.affectNeighbors(x, y, (ox, oy) => {
@@ -5893,12 +6003,12 @@ let brushSelectionTex = null;
 let lineDrawingPoints = [];
 let lastDrawingPoint = undefined;
 const drawingRange = 5;
-
-let currentDebugColor = Color.RED;
 let debugColor1 = Color.RED;
-let debugColor2 = Color.BLUE;
+let debugColor2 = Color.PURPLE; 
+let currentDebugColor = debugColor1;
+
 let debugColorInterval = 7;
-let debugOscillating = false;
+let debugOscillating = false; //COOL feature
 
 let lightSources = [];
 
@@ -6398,7 +6508,7 @@ function stepGraphics() {
 					case 1:
 						//negative values are not included annoyingly
 						displayCol.red = cell.vel.mag*50;
-						displayCol.blue = (Math.abs(cell.acts))*(255/8);
+						displayCol.blue = (Math.abs(cell.acts))//*(255/100);
 						displayCol.green =  DATA[cell.id].reference ?  (cell.reference) ? (255 * DATA[cell.reference].getColor(x, y).brightness) : 0 : 0;
 						displayCol = Color.lerp(displayCol, element.getColor(x, y), 0.3)
 						break;
@@ -6520,7 +6630,7 @@ function displayBrushPreview() {
 				renderer.stroke(...brushPreviewArgs).rect(Rect.fromMinMax(mouse.world.minus(cellBrushSize), mouse.world.plus(cellBrushSize)));
 
 				// let prevValue;
-					renderer.stroke(...brushPreviewArgs).connector(lineDrawingPoints.map(point => point.times(CELL)));
+				renderer.stroke(...brushPreviewArgs).connector(lineDrawingPoints.map(point => point.times(CELL)).concat([mouse.world]));
 						// let currentValue;
 						// let values = lineDrawingPoints.values();
 						// prevValue = lineDrawingPoints[0];
@@ -6561,6 +6671,7 @@ function displayDebugInfo() {
 		debugFrame.renderer.transform = scene.camera;
 
 		if (debugOscillating) {
+			const time = intervals.frameCount;
 			if (time % debugColorInterval === 0 && currentDebugColor === debugColor1) currentDebugColor = debugColor2;
 			else if (time % debugColorInterval === 0) currentDebugColor = debugColor1;
 		}
